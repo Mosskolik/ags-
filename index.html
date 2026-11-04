@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hedef AGS — Çalışma Koçu</title>
+  <meta name="description" content="AGS (Din Kültürü ÖABT) ve İlahiyat / Din Eğitimi yüksek lisansı için kişisel çalışma koçu: program, takip, analiz ve hatırlatıcılar.">
+  <meta name="theme-color" content="#0f5c4d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Hedef AGS">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="icons/icon.svg" alt="" width="36" height="36">
+        <div>
+          <strong>Hedef AGS</strong>
+          <small>Çalışma Koçun</small>
+        </div>
+      </div>
+      <nav id="nav" class="nav"></nav>
+      <div class="sidebar-foot" id="countdown-mini"></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <h1 id="page-title">Bugün</h1>
+        <div class="topbar-actions">
+          <span id="streak-chip" class="chip" title="Kesintisiz çalışma serisi"></span>
+          <button id="timer-chip" class="chip chip-timer hidden" type="button"></button>
+        </div>
+      </header>
+      <section id="view" class="view" aria-live="polite"></section>
+    </main>
+
+    <nav id="tabbar" class="tabbar"></nav>
+  </div>
+
+  <dialog id="modal">
+    <form method="dialog" id="modal-form">
+      <div id="modal-body"></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
