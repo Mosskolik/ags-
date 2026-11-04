@@ -48,21 +48,60 @@
       done: {}, // "YYYY-MM-DD|blockId": true
       reminders: { enabled: false, morning: '08:30', evening: '21:30', blocks: true, fired: {} },
       timer: null,
-      reviews: [], lastWeekly: null
+      reviews: [], lastWeekly: null, updatedAt: 0
     };
   }
 
+  function mergeDefaults(s) {
+    const d = defaultState();
+    return { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan } };
+  }
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (!raw) return defaultState();
-      const s = JSON.parse(raw);
-      const d = defaultState();
-      return { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan } };
+      return mergeDefaults(JSON.parse(raw));
     } catch (e) { return defaultState(); }
   }
   let S = load();
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('Kaydedilemedi: depolama dolu olabilir'); } }
+  let cloud = null; let cloudT = null;
+  function save() {
+    S.updatedAt = Date.now();
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* tarayıcı depolaması yok */ }
+    if (cloud) { clearTimeout(cloudT); cloudT = setTimeout(pushCloud, 1500); }
+  }
+  async function pushCloud() {
+    if (!cloud) return;
+    const json = JSON.stringify(S);
+    if (json.length > 250000) { toast('Veri çok büyüdü; Ayarlar’dan yedek alıp eski kayıtları temizle.'); return; }
+    try { await cloud.ref.set({ json, updatedAt: S.updatedAt }); setSync('ok'); } catch (e) { setSync('err'); }
+  }
+  let syncState = 'local';
+  function setSync(st) { syncState = st; const el = document.getElementById('sync-chip'); if (el) el.textContent = { ok: '☁ eşitlendi', err: '☁ eşitlenemedi', local: '', wait: '☁ …' }[st]; }
+  async function initCloud() {
+    if (!window.claude || typeof window.claude.use !== 'function') return;
+    try {
+      const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+      if (!db || !user) return;
+      const id = await user.id(); if (!id) return;
+      const ref = db.collection('data/users/' + id).doc('state');
+      setSync('wait');
+      const snap = await ref.get();
+      cloud = { ref };
+      if (snap.exists) {
+        const d = snap.data();
+        if (d && d.json && (Number(d.updatedAt) || 0) > (Number(S.updatedAt) || 0)) {
+          const remote = JSON.parse(d.json);
+          try { localStorage.setItem(KEY, d.json); } catch (e) { /* yok */ }
+          S = mergeDefaults(remote);
+          if (S.profile.onboarded && modalIsOnboarding && $('#modal').open) { modalHandler = null; modalCancel = null; modalIsOnboarding = false; $('#modal').close(); }
+          render(); toast('Verilerin hesabından yüklendi ☁');
+          setSync('ok'); return;
+        }
+      }
+      await pushCloud();
+    } catch (e) { setSync('err'); }
+  }
 
   const subj = (id) => S.subjects.find((s) => s.id === id);
   const examSubjects = () => S.subjects.filter((s) => s.group !== 'yl');
@@ -320,7 +359,7 @@
     { id: 'yl', title: 'Yüksek Lisans', icon: '🎓' },
     { id: 'stats', title: 'Analiz', icon: '📈' },
     { id: 'guide', title: 'Rehber', icon: '🧭' },
-    { id: 'settings', title: 'Ayarlar', icon: '⚙' }
+    { id: 'ayarlar', title: 'Ayarlar', icon: '⚙' }
   ];
   const TAB_IDS = ['today', 'plan', 'study', 'stats', 'more'];
   let current = (location.hash || '#today').slice(1);
@@ -328,7 +367,7 @@
 
   function renderNav() {
     $('#nav').innerHTML = VIEWS.map((v) => `<a href="#${v.id}" class="${v.id === current ? 'active' : ''}"><span class="ico">${v.icon}</span>${v.title}</a>`).join('');
-    const more = ['topics', 'exams', 'yl', 'guide', 'settings', 'more'].includes(current);
+    const more = ['topics', 'exams', 'yl', 'guide', 'ayarlar', 'more'].includes(current);
     $('#tabbar').innerHTML = TAB_IDS.map((id) => {
       if (id === 'more') return `<a href="#more" class="${more ? 'active' : ''}"><span class="ico">⋯</span>Diğer</a>`;
       const v = VIEWS.find((x) => x.id === id);
@@ -344,14 +383,15 @@
     renderNav();
     const v = VIEWS.find((x) => x.id === current);
     $('#page-title').textContent = current === 'more' ? 'Diğer' : v.title;
-    const fn = { today: vToday, plan: vPlan, study: vStudy, topics: vTopics, exams: vExams, yl: vYL, stats: vStats, guide: vGuide, settings: vSettings, more: vMore }[current];
+    const fn = { today: vToday, plan: vPlan, study: vStudy, topics: vTopics, exams: vExams, yl: vYL, stats: vStats, guide: vGuide, ayarlar: vSettings, more: vMore }[current];
     $('#view').innerHTML = fn();
     renderTimerChip();
     if (current === 'study') tickTimer();
+    setSync(syncState);
   }
 
   function vMore() {
-    return `<div class="grid-more">${['topics', 'exams', 'yl', 'guide', 'settings'].map((id) => { const v = VIEWS.find((x) => x.id === id); return `<a class="card more-card" href="#${id}"><span class="big-ico">${v.icon}</span>${v.title}</a>`; }).join('')}</div>`;
+    return `<div class="grid-more">${['topics', 'exams', 'yl', 'guide', 'ayarlar'].map((id) => { const v = VIEWS.find((x) => x.id === id); return `<a class="card more-card" href="#${id}"><span class="big-ico">${v.icon}</span>${v.title}</a>`; }).join('')}</div>`;
   }
 
   function blockRow(b, d, { actions = true } = {}) {
@@ -416,7 +456,7 @@
         </section>
       </div>
     </div>
-    ${!S.reminders.enabled ? `<section class="card banner"><div><b>Hatırlatıcıları aç</b><p class="muted">Sabah planını, akşam kontrolünü ve blok başlangıçlarını bildirim olarak al.</p></div><a class="btn" href="#settings">Ayarla</a></section>` : ''}`;
+    ${!S.reminders.enabled ? `<section class="card banner"><div><b>Hatırlatıcıları aç</b><p class="muted">Sabah planını, akşam kontrolünü ve blok başlangıçlarını bildirim olarak al.</p></div><a class="btn" href="#ayarlar">Ayarla</a></section>` : ''}`;
   }
 
   function reviewCard() {
@@ -883,8 +923,8 @@
     </form>
 
     <section class="card">
-      <div class="card-h"><h3>Veriler — telefon ve bilgisayar arasında taşı</h3></div>
-      <p class="muted small">Veriler sadece bu cihazda saklanır. Diğer cihaza geçmek için yedeği indir, öbür cihazda “Yedeği yükle” de. Haftada bir yedek almanı öneririm.</p>
+      <div class="card-h"><h3>Veriler ve eşitleme</h3><span class="chip" id="sync-chip"></span></div>
+      <p class="muted small">${cloud ? 'Verilerin hesabına kaydediliyor: aynı bağlantıyı telefonda ve bilgisayarda açtığında hepsi kendiliğinden eşitlenir. Yine de ayda bir yedek indirmeni öneririm.' : 'Veriler bu cihazda saklanır. Diğer cihaza geçmek için yedeği indir, öbür cihazda “Yedeği yükle” de.'}</p>
       <div class="btn-row"><button class="btn" data-act="export">⬇ Yedeği indir</button>
       <label class="btn ghost file-btn">⬆ Yedeği yükle<input type="file" accept="application/json,.json" id="import-file" hidden></label>
       <button class="btn ghost danger" data-act="reset">Sıfırla</button></div>
@@ -894,8 +934,9 @@
 
   // ------------------------------------------------------------------ modal
   let modalHandler = null;
-  function openModal(html, onClose, onInput) {
-    const dlg = $('#modal'); $('#modal-body').innerHTML = html; modalHandler = onClose;
+  let modalCancel = null;
+  function openModal(html, onClose, onInput, onCancel) {
+    const dlg = $('#modal'); $('#modal-body').innerHTML = html; modalHandler = onClose; modalCancel = onCancel || null;
     dlg._onInput = onInput || null;
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
   }
@@ -906,15 +947,23 @@
     const dlg = $('#modal');
     if (v === 'ok' && !e.target.reportValidity()) return;
     dlg.close();
-    const h = modalHandler; modalHandler = null;
-    if (h && v !== 'cancel') h(v, data);
+    const h = modalHandler; const c = modalCancel; modalHandler = null; modalCancel = null; modalIsOnboarding = false;
+    if (h && v !== 'cancel') h(v, data); else if (c) c();
   });
+  $('#modal').addEventListener('cancel', () => { const c = modalCancel; modalHandler = null; modalCancel = null; if (c) c(); });
   $('#modal-form').addEventListener('change', (e) => {
     if (e.target.id === 'm-subject') $('#m-topic').innerHTML = topicOptions(e.target.value);
     const dlg = $('#modal'); if (dlg._onInput) dlg._onInput(e);
   });
 
+  function ask(msg, yes = 'Evet') {
+    return new Promise((res) => openModal(`<h3>Emin misin?</h3><p>${esc(msg)}</p>
+      <div class="btn-row end"><button class="btn ghost" value="cancel" formnovalidate>Vazgeç</button><button class="btn danger-solid" value="ok">${esc(yes)}</button></div>`,
+      () => res(true), null, () => res(false)));
+  }
+  let modalIsOnboarding = false;
   function onboarding() {
+    modalIsOnboarding = true;
     openModal(`
       <h3>Hoş geldin 👋</h3>
       <p class="muted">Ben senin çalışma koçunum. AGS + ÖABT (Din Kültürü) ve yüksek lisansın için haftalık program hazırlayacağım, çalışmanı takip edip analiz çıkaracağım ve sana hatırlatacağım. Birkaç bilgi yeter:</p>
@@ -985,7 +1034,11 @@
     download('hedef-ags-program.ics', lines.join('\r\n'), 'text/calendar');
     toast('Takvim dosyası indirildi — açıp takvimine ekle.');
   }
-  function download(name, text, type) {
+  async function download(name, text, type) {
+    try {
+      const dl = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('downloads') : null;
+      if (dl) { await dl.save({ filename: name, data: new Blob([text], { type }) }); return; }
+    } catch (e) { if (e && e.code && e.code !== 'unavailable') return; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
@@ -1029,7 +1082,7 @@
     tStart() { const sid = $('#t-subject').value; startTimer(sid, $('#t-topic').value, $('#t-target').value, nextBlockToday()?.subjectId === sid ? nextBlockToday().id : null); render(); },
     tPause() { const t = S.timer; t.acc += Date.now() - t.startedAt; t.running = false; save(); render(); },
     tResume() { const t = S.timer; t.startedAt = Date.now(); t.running = true; save(); render(); },
-    tCancel() { if (confirm('Sayaç kaydedilmeden silinsin mi?')) { S.timer = null; save(); render(); } },
+    async tCancel() { if (await ask('Sayaç kaydedilmeden silinsin mi?', 'Sil')) { S.timer = null; save(); render(); } },
     tFinish() {
       const t = S.timer; const mins = Math.max(1, Math.round(timerElapsed() / 60000));
       openModal(sessionForm({ subjectId: t.subjectId, topicId: t.topicId, minutes: mins, date: t.date }), (v, f) => {
@@ -1037,17 +1090,17 @@
       });
     },
     addSession() { openModal(sessionForm({ subjectId: studySubject || 'egitim' }), (v, f) => { saveSession(f); render(); }); },
-    delSession(el) { if (!confirm('Bu çalışma kaydı silinsin mi?')) return; S.sessions = S.sessions.filter((s) => s.id !== el.dataset.id); save(); render(); },
+    async delSession(el) { if (!(await ask('Bu çalışma kaydı silinsin mi?', 'Sil'))) return; S.sessions = S.sessions.filter((s) => s.id !== el.dataset.id); save(); render(); },
     openSubj(el) { openSubj = openSubj === el.dataset.id ? null : el.dataset.id; render(); },
     topicStatus(el) { const t = subj(el.dataset.s).topics.find((x) => x.id === el.dataset.t); setTopicStatus(t, Number(el.dataset.v)); save(); render(); },
     reviewed(el) { const t = subj(el.dataset.s).topics.find((x) => x.id === el.dataset.t); t.reviews = (t.reviews || 0) + 1; t.lastReview = dkey(); if (t.reviews >= 3) t.status = 3; save(); render(); toast(t.reviews >= SR.length ? 'Konu kalıcı hafızada ★' : `Tekrar kaydedildi — sonraki: ${SR[t.reviews]} gün sonra`); },
     weekly() { weeklyReview(); },
     cycleTopic(el) { const t = subj(el.dataset.s).topics.find((x) => x.id === el.dataset.t); setTopicStatus(t, (t.status + 1) % 4); save(); render(); },
     addTopic(el) { const inp = $(`#new-topic-${el.dataset.s}`); const n = inp.value.trim(); if (!n) return; subj(el.dataset.s).topics.push({ id: uid(), name: n, status: 0 }); save(); render(); },
-    delTopic(el) { if (!confirm('Konu silinsin mi?')) return; const s = subj(el.dataset.s); s.topics = s.topics.filter((t) => t.id !== el.dataset.t); save(); render(); },
+    async delTopic(el) { if (!(await ask('Konu silinsin mi?', 'Sil'))) return; const s = subj(el.dataset.s); s.topics = s.topics.filter((t) => t.id !== el.dataset.t); save(); render(); },
     addExam(el) { openModal(examForm(el.dataset.type), (v, f) => { saveExam(f); }); },
     editExam(el) { const e = S.exams.find((x) => x.id === el.dataset.id); openModal(examForm(e.type, e), (v, f) => saveExam(f, e)); },
-    delExam(el) { if (!confirm('Deneme silinsin mi?')) return; S.exams = S.exams.filter((x) => x.id !== el.dataset.id); save(); render(); },
+    async delExam(el) { if (!(await ask('Deneme silinsin mi?', 'Sil'))) return; S.exams = S.exams.filter((x) => x.id !== el.dataset.id); save(); render(); },
     addTask() { openModal(taskForm(), (v, f) => { S.tasks.push({ id: uid(), title: f.title.trim(), type: f.type, due: f.due, done: false }); save(); render(); }); },
     editTask(el) {
       const t = S.tasks.find((x) => x.id === el.dataset.id);
@@ -1061,7 +1114,7 @@
       render();
     },
     export() { download(`hedef-ags-yedek-${dkey()}.json`, JSON.stringify(S, null, 1), 'application/json'); toast('Yedek indirildi'); },
-    reset() { if (confirm('TÜM veriler silinecek. Emin misin? (Önce yedek almanı öneririm)')) { S = defaultState(); save(); render(); onboarding(); } }
+    async reset() { if (await ask('TÜM veriler silinecek. Önce yedek almanı öneririm.', 'Hepsini sil')) { S = defaultState(); save(); render(); onboarding(); } }
   };
   function saveExam(f, existing) {
     const res = {};
@@ -1108,19 +1161,19 @@
   function importFile(file) {
     if (!file) return;
     const r = new FileReader();
-    r.onload = () => {
+    r.onload = async () => {
       try {
         const d = JSON.parse(r.result);
         if (!d || !d.profile || !Array.isArray(d.subjects)) throw new Error('format');
-        if (!confirm('Bu cihazdaki veriler yedektekilerle değiştirilecek. Devam?')) return;
-        localStorage.setItem(KEY, JSON.stringify(d)); S = load(); render(); toast('Yedek yüklendi ✓');
+        if (!(await ask('Bu cihazdaki veriler yedektekilerle değiştirilecek.', 'Yükle'))) return;
+        S = mergeDefaults(d); save(); render(); toast('Yedek yüklendi ✓');
       } catch (e) { toast('Dosya okunamadı — Hedef AGS yedeği mi?'); }
     };
     r.readAsText(file);
   }
 
   window.addEventListener('hashchange', () => { const h = location.hash.slice(1); current = VIEWS.find((v) => v.id === h) || h === 'more' ? h : 'today'; render(); window.scrollTo(0, 0); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { S = load(); render(); checkReminders(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { if (localStorage.getItem(KEY)) S = load(); } catch (e) { /* yok */ } render(); checkReminders(); } });
 
   // ------------------------------------------------------------------- boot
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
@@ -1135,5 +1188,6 @@
   // gün değişince yeniden çiz
   let lastDay = dkey(); setInterval(() => { if (dkey() !== lastDay) { lastDay = dkey(); render(); } }, 60000);
 
+  initCloud();
   window.__hedef = { get state() { return S; }, generatePlan, coachMessages };
 })();
