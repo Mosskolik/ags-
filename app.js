@@ -79,6 +79,13 @@
   // Ders videosu başlıklarında geçebilecek kelimeler. Ders dışı videoları yanlışlıkla
   // yakalamasın diye çok genel kelimeler (kamp, sünnet, problem, tarih…) tek başına kullanılmadı.
   const DEFAULT_LESSON_KEYWORDS = [
+    // genel eğitim ve ders kelimeleri (her türlü eğitim videosu)
+    'ders', 'dersi', 'dersleri', 'dersler', 'ders çalış', 'ders anlatım', 'eğitim', 'öğretim', 'öğretmen', 'öğrenci', 'okul', 'üniversite',
+    'fakülte', 'akademi', 'akademik', 'akademisyen', 'seminer', 'konferans', 'sempozyum', 'webinar', 'sunum', 'kurs', 'kursu', 'sınav', 'sınava hazırlık',
+    'vize sınavı', 'final sınavı', 'ödev', 'ödevi', 'kitap özeti', 'kitap analizi', 'kitap incelemesi', 'özet', 'not çıkarma', 'not alma',
+    'çalışma yöntemi', 'çalışma teknikleri', 'verimli çalışma', 'nasıl ders çalış', 'birlikte ders', 'study with me', 'pomodoro', 'odaklanma',
+    'pedagoji', 'pedagojik', 'didaktik', 'müfredat', 'kazanım', 'ünite', 'felsefe', 'psikoloji', 'sosyoloji', 'bilimsel', 'prof.', 'doç.',
+    'lecture', 'lesson', 'course', 'tutorial', 'education', 'learning', 'exam',
     // genel sınav ve ders ifadeleri
     'ags', 'öabt', 'kpss', 'meb ags', 'akademi giriş', 'konu anlatımı', 'konu anlatım', 'ders anlatımı', 'soru çözümü', 'soru çözüm',
     'deneme sınavı', 'deneme çözümü', 'çıkmış sorular', 'çıkmış soru', 'tekrar kampı', 'soru kampı', 'genel tekrar', 'full tekrar', 'hızlı tekrar',
@@ -113,7 +120,10 @@
     // yüksek lisans ve tez
     'tez yazımı', 'tez yazma', 'tez danışmanı', 'tez önerisi', 'akademik yazım', 'akademik yazma', 'araştırma yöntemleri', 'bilimsel araştırma',
     'nitel araştırma', 'nicel araştırma', 'karma yöntem', 'literatür taraması', 'kaynak gösterme', 'apa', 'spss', 'veri analizi', 'makale yazımı',
-    'yüksek lisans', 'lisansüstü'
+    'yüksek lisans', 'lisansüstü', 'doktora', 'tez savunması', 'tez jürisi', 'etik kurul', 'kaynakça', 'atıf', 'zotero', 'mendeley', 'endnote',
+    'bilimsel makale', 'istatistik', 'betimsel', 'faktör analizi', 'regresyon', 'anova', 't testi', 'korelasyon', 'ölçek geliştirme',
+    'görüşme tekniği', 'odak grup', 'içerik analizi', 'doküman analizi', 'durum çalışması', 'fenomenoloji', 'gömülü teori', 'eylem araştırması',
+    'örneklem', 'hipotez', 'güvenilirlik analizi', 'tez konusu', 'proje yazımı'
   ];
   const OLD_DEFAULT_KEYWORDS_V1 = ['ags', 'öabt', 'kpss', 'meb', 'eğitim bilimleri', 'eğitimin temelleri', 'gelişim psikolojisi', 'öğrenme psikolojisi',
     'ölçme ve değerlendirme', 'ölçme değerlendirme', 'program geliştirme', 'öğretim ilke', 'öğretim yöntem', 'rehberlik', 'sınıf yönetimi', 'özel eğitim',
