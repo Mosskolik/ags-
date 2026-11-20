@@ -37,6 +37,9 @@ const components = `
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_countdown_info" />
         </receiver>
         <receiver android:name=".WidgetRefreshReceiver" android:exported="false" />
+        <service android:name=".MediaWatchService" android:exported="true" android:label="Hedef AGS · Ders videosu kontrolü" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
+        </service>
         <receiver android:name=".HedefWidget" android:exported="false" android:label="Hedef AGS · Rüzgar">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_hedef_info" />

@@ -76,6 +76,13 @@
     ['com.netflix.mediaclient', 'Netflix'], ['com.snapchat.android', 'Snapchat'],
     ['com.reddit.frontpage', 'Reddit'], ['tv.twitch.android.app', 'Twitch']
   ];
+  const DEFAULT_LESSON_KEYWORDS = ['ags', 'öabt', 'kpss', 'meb', 'eğitim bilimleri', 'eğitimin temelleri', 'gelişim psikolojisi', 'öğrenme psikolojisi',
+    'ölçme ve değerlendirme', 'ölçme değerlendirme', 'program geliştirme', 'öğretim ilke', 'öğretim yöntem', 'rehberlik', 'sınıf yönetimi', 'özel eğitim',
+    'mevzuat', 'anayasa', 'milli eğitim', 'öğretmenlik meslek', '657', '1739', 'sözel mantık', 'paragraf', 'sözcükte anlam', 'problem', 'sayısal mantık',
+    'inkılap', 'osmanlı', 'türk tarihi', 'coğrafya', 'din kültürü', 'dkab', 'tefsir', 'hadis', 'fıkıh', 'kelam', 'siyer', 'islam tarihi', 'tasavvuf',
+    'dinler tarihi', 'din psikolojisi', 'din sosyolojisi', 'din eğitimi', 'din felsefesi', 'mezhepler', 'tecvit', 'konu anlatımı', 'soru çözümü', 'deneme çözümü',
+    'tez yazımı', 'akademik yazım', 'araştırma yöntemleri', 'literatür'];
+  const lessonKeywords = () => (S.guard.media && Array.isArray(S.guard.media.keywords) ? S.guard.media.keywords : DEFAULT_LESSON_KEYWORDS);
   let syncT = null;
   function nativeSyncSoon() { if (!isNative) return; clearTimeout(syncT); syncT = setTimeout(nativeSync, 800); }
   function nativeSync() {
@@ -88,7 +95,8 @@
       timerRunning: !!(S.timer && S.timer.running), timerSubject: S.timer ? (subj(S.timer.subjectId)?.short || '') : '',
       doneToday: Object.keys(S.done).filter((x) => x.startsWith(k + '|')).map((x) => x.slice(11)),
       blocks: S.plan.blocks.map((b) => ({ id: b.id, dow: b.dow, start: b.start, minutes: b.minutes, name: subj(b.subjectId)?.short || subjName(b.subjectId), full: subjName(b.subjectId), kind: KIND[b.kind] || '' })),
-      guard: { enabled: !!g.enabled, mode: g.mode || 'blocks', apps: g.apps || [], strict: !!g.strict, graceMin: Number(g.graceMin) || 10, labels },
+      guard: { enabled: !!g.enabled, mode: g.mode || 'blocks', apps: g.apps || [], strict: !!g.strict, graceMin: Number(g.graceMin) || 10, labels,
+        media: { enabled: !!(g.media && g.media.enabled), channels: (g.media && g.media.channels) || [], keywords: lessonKeywords() } },
       quotes: window.QUOTES, coins: S.coins || 0, mascotName: S.mascotName || 'Rüzgar'
     };
     H.update({ json: JSON.stringify(snap) }).catch(() => {});
@@ -114,6 +122,18 @@
     set('st-usage', st.usage, 'verildi', 'gerekli');
     set('st-overlay', st.overlay, 'verildi', 'gerekli');
     set('st-guard', st.guardRunning, 'çalışıyor', 'kapalı');
+    set('st-media', st.media, 'verildi', 'gerekli');
+    const lm = document.getElementById('last-media');
+    if (lm) {
+      if (st.lastTitle) {
+        lm.hidden = false;
+        lm.querySelector('.lm-title').textContent = st.lastTitle;
+        lm.querySelector('.lm-ch').textContent = st.lastChannel || 'kanal bilinmiyor';
+        lm.querySelector('.lm-verdict').textContent = st.lastVerdict === 'lesson' ? '✓ ders sayıldı' : '✗ ders sayılmadı';
+        lm.querySelector('.lm-verdict').className = 'lm-verdict ' + (st.lastVerdict === 'lesson' ? 'ok' : 'no');
+        const btn = lm.querySelector('[data-act=addChannel]'); btn.dataset.ch = st.lastChannel || ''; btn.hidden = !st.lastChannel || (S.guard.media.channels || []).includes(st.lastChannel);
+      } else lm.hidden = true;
+    }
     const w = document.getElementById('st-widget'); if (w) w.textContent = st.widgets ? `${st.widgets} widget ekli` : 'henüz eklenmedi';
   }
   function alarmDays(pred) { return [0, 1, 2, 3, 4, 5, 6].filter(pred).map((i) => (i === 6 ? 1 : i + 2)); }
@@ -188,7 +208,7 @@
       done: {}, // "YYYY-MM-DD|blockId": true
       reminders: { enabled: false, morning: '08:30', evening: '21:30', blocks: true, fired: {} },
       timer: null,
-      guard: { enabled: false, mode: 'blocks', apps: ['com.google.android.youtube', 'com.instagram.android', 'com.zhiliaoapp.musically', 'com.ss.android.ugc.trill'], strict: false, graceMin: 10 },
+      guard: { enabled: false, mode: 'blocks', apps: ['com.google.android.youtube', 'com.instagram.android', 'com.zhiliaoapp.musically', 'com.ss.android.ugc.trill'], strict: false, graceMin: 10, media: { enabled: false, channels: [], keywords: null } },
       reviews: [], lastWeekly: null, updatedAt: 0,
       coins: 0, earned: 0, owned: [], look: {}, mascotName: 'Rüzgar', awards: {}, coinLog: [], dayRatings: {}, firstDay: null
     };
@@ -207,7 +227,7 @@
   let migrated = false;
   function mergeDefaults(s) {
     const d = defaultState();
-    const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan }, guard: { ...d.guard, ...(s.guard || {}) }, look: { ...(s.look || {}) }, awards: { ...(s.awards || {}) } };
+    const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan }, guard: { ...d.guard, ...(s.guard || {}), media: { ...d.guard.media, ...((s.guard || {}).media || {}) } }, look: { ...(s.look || {}) }, awards: { ...(s.awards || {}) } };
     // eski tahmini tarihi ÖSYM'nin açıkladığı resmi tarihle değiştir
     m.dayRatings = { ...(s.dayRatings || {}) };
     if (!m.firstDay) m.firstDay = (s.sessions || []).reduce((a, x) => (!a || x.date < a ? x.date : a), null) || null;
@@ -1350,7 +1370,23 @@
         <label class="switch"><input type="checkbox" name="strict" ${g.strict ? 'checked' : ''}> <b>Sıkı mod</b></label>
         <p class="muted small">Açıkken uyarıda “izin ver” düğmesi olmaz: uyarıya rağmen ${15} saniye içinde çıkmazsan o uygulamayı kapatır ve seni çalışma ekranına getirir. Blok başladığı hâlde ${Number(g.graceMin) || 10}+10 dakika çalışmazsan uygulamayı kendisi açar. İstediğin an buradan kapatabilirsin.</p>
       </div>
+      <div class="media-box">
+        <label class="switch"><input type="checkbox" name="mediaEnabled" ${g.media && g.media.enabled ? 'checked' : ''}> <b>🎬 YouTube’da ders videolarına izin ver</b></label>
+        <p class="muted small">Açıkken YouTube’da çalan videonun <b>kanalına</b> ve <b>başlığına</b> bakılır. Video aşağıdaki kanallardan birindeyse ya da başlığında anahtar kelimelerden biri geçiyorsa uyarı gelmez. Ders videosu ararken 60 saniye serbest gezinebilirsin. Video adı yalnızca bu cihazda kontrol edilir, hiçbir yere gönderilmez.</p>
+        <label>Ders kanallarım <small class="muted">(her satıra bir kanal adı, YouTube’da göründüğü gibi)</small>
+          <textarea name="channels" rows="4" placeholder="Örneğin:&#10;Kanal adı 1&#10;Kanal adı 2">${esc(((g.media && g.media.channels) || []).join('\n'))}</textarea></label>
+        <label>Başlıkta aranacak anahtar kelimeler <small class="muted">(virgülle ayır)</small>
+          <textarea name="keywords" rows="4">${esc(lessonKeywords().join(', '))}</textarea></label>
+        <button type="button" class="btn sm ghost" data-act="resetKeywords">Varsayılan kelimelere dön</button>
+        <div id="last-media" class="last-media" hidden>
+          <small class="muted">Son algılanan video</small>
+          <b class="lm-title"></b>
+          <span><span class="lm-ch muted"></span> · <span class="lm-verdict"></span></span>
+          <button type="button" class="btn sm" data-act="addChannel" data-ch="">Bu kanalı ders kanallarıma ekle</button>
+        </div>
+      </div>
       <h4>Gerekli izinler</h4>
+      <div class="perm-row"><span>Bildirim erişimi <small class="muted">(YouTube’da çalan videonun adını görmek için; sadece ders videosu kontrolü açıksa gerekir)</small></span><span class="chip" id="st-media">…</span><button type="button" class="btn sm" data-act="permMedia">Ver</button></div>
       <div class="perm-row"><span>Kullanım erişimi <small class="muted">(hangi uygulamanın açık olduğunu görmek için)</small></span><span class="chip" id="st-usage">…</span><button type="button" class="btn sm" data-act="permUsage">Ver</button></div>
       <div class="perm-row"><span>Diğer uygulamaların üzerinde göster <small class="muted">(tam ekran uyarı için)</small></span><span class="chip" id="st-overlay">…</span><button type="button" class="btn sm" data-act="permOverlay">Ver</button></div>
       <div class="perm-row"><span>Pil kısıtlamasını kaldır <small class="muted">(bekçi kapanmasın)</small></span><span></span><button type="button" class="btn sm ghost" data-act="permBattery">Ayarla</button></div>
@@ -1614,6 +1650,12 @@
     async phoneCalendarRemove() { const H = plugin('Hedef'); try { await H.removeCalendarEvents(); toast('Hedef AGS etkinlikleri takvimden kaldırıldı'); } catch (e) { /* yok */ } },
     async permUsage() { try { await plugin('Hedef').openUsageSettings(); toast('Listede Hedef AGS’yi bul ve izin ver, sonra geri dön.', 5000); } catch (e) { /* yok */ } },
     async permOverlay() { try { await plugin('Hedef').openOverlaySettings(); } catch (e) { /* yok */ } },
+    async permMedia() { try { await plugin('Hedef').openMediaSettings(); toast('Listede Hedef AGS’yi bul ve izin ver, sonra geri dön.', 5000); } catch (e) { /* yok */ } },
+    addChannel(el) {
+      const ch = el.dataset.ch; if (!ch) return; S.guard.media = S.guard.media || { enabled: true, channels: [] };
+      S.guard.media.channels = [...new Set([...(S.guard.media.channels || []), ch])]; save(); render(); toast(`“${ch}” ders kanallarına eklendi ✓`);
+    },
+    resetKeywords() { S.guard.media = S.guard.media || {}; S.guard.media.keywords = null; save(); render(); toast('Varsayılan anahtar kelimeler geri yüklendi'); },
     async permBattery() { try { await plugin('Hedef').openBatterySettings(); toast('Hedef AGS → Kısıtlama yok / Optimize etme', 5000); } catch (e) { /* yok */ } },
     export() { download(`hedef-ags-yedek-${dkey()}.json`, JSON.stringify(S, null, 1), 'application/json'); toast('Yedek indirildi'); },
     async reset() { if (await ask('TÜM veriler silinecek. Önce yedek almanı öneririm.', 'Hepsini sil')) { S = defaultState(); save(); render(); onboarding(); } }
@@ -1659,6 +1701,12 @@
       S.mascotName = (f.name || '').trim().slice(0, 18) || 'Rüzgar'; toast(`Maskotunun adı artık ${S.mascotName} 🐴`);
     } else if (form.dataset.form === 'guard') {
       const g = S.guard; g.enabled = !!f.enabled; g.mode = f.mode; g.strict = !!f.strict; g.graceMin = clamp(Number(f.graceMin) || 10, 1, 60);
+      g.media = g.media || {};
+      g.media.enabled = !!f.mediaEnabled;
+      g.media.channels = String(f.channels || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 60);
+      const kw = String(f.keywords || '').split(/[,\n]/).map((x) => x.trim()).filter(Boolean).slice(0, 150);
+      g.media.keywords = kw.length ? kw : null;
+      if (g.media.enabled) nativeStatus().then((st) => { if (st && !st.media) toast('Ders videosu kontrolü için “Bildirim erişimi” iznini ver.', 5000); });
       g.apps = GUARD_APPS.map(([pkg]) => pkg).filter((pkg) => f['app:' + pkg]);
       toast(g.enabled ? (g.strict ? 'Odak bekçisi sıkı modda açık 🔒' : 'Odak bekçisi açık') : 'Odak bekçisi kapalı');
       nativeStatus().then((st) => { if (g.enabled && st && !st.usage) toast('Bekçinin çalışması için “Kullanım erişimi” iznini ver.', 5000); });

@@ -89,6 +89,10 @@ public class HedefPlugin extends Plugin {
         r.put("calendar", getPermissionState("calendar") == PermissionState.GRANTED);
         r.put("canPinWidget", Build.VERSION.SDK_INT >= 26 && AppWidgetManager.getInstance(ctx()).isRequestPinAppWidgetSupported());
         r.put("widgets", HedefWidget.count(ctx()));
+        r.put("media", MediaWatchService.enabled(ctx()));
+        r.put("lastTitle", HedefState.prefs(ctx()).getString("lastMediaTitle", ""));
+        r.put("lastChannel", HedefState.prefs(ctx()).getString("lastMediaChannel", ""));
+        r.put("lastVerdict", HedefState.prefs(ctx()).getString("lastMediaVerdict", ""));
         call.resolve(r);
     }
 
@@ -105,6 +109,11 @@ public class HedefPlugin extends Plugin {
     @PluginMethod
     public void openUsageSettings(PluginCall call) {
         startSettings(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS), call);
+    }
+
+    @PluginMethod
+    public void openMediaSettings(PluginCall call) {
+        startSettings(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"), call);
     }
 
     @PluginMethod

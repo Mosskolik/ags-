@@ -53,6 +53,10 @@ public class FocusGuardService extends Service {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private String currentPkg = "";
+    private long pkgSince = 0;          // ön plandaki uygulamaya ne zaman geçildi
+    private int lastMediaVerdict = MediaWatchService.NONE;
+    static final String YOUTUBE = "com.google.android.youtube";
+    static final long BROWSE_GRACE_MS = 60_000; // ders videosu ararken serbest gezinme süresi
     private long lastQuery = 0;
     private long snoozeUntil = 0;
     private View overlay = null;
@@ -168,6 +172,14 @@ public class FocusGuardService extends Service {
         boolean goalOpen = s.goalMinutes() > 0 && s.todayMinutes() < s.goalMinutes();
         boolean guardNow = "goal".equals(s.guard().optString("mode", "blocks")) ? (studyTime || goalOpen) : studyTime;
         boolean distracting = s.guardApps().contains(currentPkg);
+        lastMediaVerdict = MediaWatchService.NONE;
+        // YouTube'da ders videosu: kanal ya da başlık eşleşirse uyarma (isteğe bağlı özellik)
+        JSONObject media = s.guard().optJSONObject("media");
+        if (distracting && YOUTUBE.equals(currentPkg) && media != null && media.optBoolean("enabled", false) && MediaWatchService.enabled(this)) {
+            lastMediaVerdict = MediaWatchService.check(this, currentPkg, s);
+            if (lastMediaVerdict == MediaWatchService.LESSON) distracting = false;
+            else if (lastMediaVerdict == MediaWatchService.NONE && System.currentTimeMillis() - pkgSince < BROWSE_GRACE_MS) distracting = false;
+        }
 
         if (overlay != null && overlayIsDistraction && !distracting) removeOverlay();
         if (System.currentTimeMillis() < snoozeUntil) return;
@@ -186,8 +198,11 @@ public class FocusGuardService extends Service {
                         : block != null ? "Şu an " + block.optString("start") + " " + block.optString("name") + " bloğundasın."
                         : "Bugünkü hedefini henüz tamamlamadın (" + HedefWidget.fmtMin(s.todayMinutes()) + " / " + HedefWidget.fmtMin(s.goalMinutes()) + ").";
                 int left = s.daysLeft();
+                String vid = lastMediaVerdict == MediaWatchService.OTHER
+                        ? "İzlediğin video (“" + MediaWatchService.lastTitle(this) + "”) ders listende değil. Ders videosuysa kanalını uygulamadaki “Ders kanallarım” listesine ekle. "
+                        : "";
                 showOverlay("📵 " + app + " şimdi değil",
-                        what + (left >= 0 ? " AGS’ye " + left + " gün kaldı." : "") + " Videolar bekleyebilir; hedefin beklemez.",
+                        vid + what + (left >= 0 ? " AGS’ye " + left + " gün kaldı." : "") + " Videolar bekleyebilir; hedefin beklemez.",
                         true, strict);
             }
             return;
@@ -220,7 +235,10 @@ public class FocusGuardService extends Service {
         UsageEvents.Event e = new UsageEvents.Event();
         while (events != null && events.hasNextEvent()) {
             events.getNextEvent(e);
-            if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND) currentPkg = e.getPackageName();
+            if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND && !e.getPackageName().equals(currentPkg)) {
+                currentPkg = e.getPackageName();
+                pkgSince = e.getTimeStamp();
+            }
         }
         lastQuery = now;
     }

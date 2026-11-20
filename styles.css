@@ -424,3 +424,10 @@ a.mascot { color: inherit; text-decoration: none; }
   .summary.strictmode .horse-anim svg { animation: windup 1.2s ease-in-out .1s 1 both, glare 1.6s ease-in-out 1.6s infinite; }
   @keyframes glare { 0%, 100% { transform: translateX(0) scale(1); } 10% { transform: translateX(-2px) scale(1.04); } 20% { transform: translateX(2px) scale(1.04); } 30% { transform: translateX(-2px) scale(1.04); } 40%, 90% { transform: translateX(0) scale(1.06); } }
 }
+.media-box { margin-top: 12px; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); }
+.media-box textarea { font-size: 14px; }
+.last-media { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; padding: 10px; border-radius: 10px; background: var(--surface); border: 1px dashed var(--line); }
+.last-media .ok { color: var(--good); font-weight: 700; } .last-media .no { color: var(--bad); font-weight: 700; }
+.last-media .btn { align-self: flex-start; }
+
+[hidden] { display: none !important; }
