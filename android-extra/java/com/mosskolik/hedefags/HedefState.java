@@ -170,11 +170,11 @@ public final class HedefState {
     static String moodLine(String mood) {
         String[] l;
         switch (mood) {
-            case "happy": l = new String[]{"Bugünkü hedef tamam! Seninle gurur duyuyorum.", "Harika iş! Yarın da böyle devam.", "Hedef tamam, seri büyüyor!"}; break;
-            case "worried": l = new String[]{"Bugün daha hiç çalışmadık…", "Seni bekliyorum, 25 dakika yeter.", "Öğleden sonra oldu, hadi başlayalım mı?"}; break;
-            case "sad": l = new String[]{"Bugün beni unuttun mu? 😢", "Seri bozulmak üzere… 1 blok kurtarır.", "Hedefimiz bizi bekliyor, gel hadi."}; break;
-            case "sleep": l = new String[]{"Dinlenmek de çalışmanın parçası.", "İyi uykular, yarın erken başlarız.", "Zzz… yarın görüşürüz."}; break;
-            default: l = new String[]{"İyi gidiyorsun, bir blok daha?", "Başladın bile, şimdi bırakma!", "Hadi, bugün de birlikte çalışalım."};
+            case "happy": l = new String[]{"Hedef tamam! Kişneyerek kutluyorum!", "Harika iş! Havuçları hak ettin.", "Bugün dört nala koştuk!"}; break;
+            case "worried": l = new String[]{"Bugün daha hiç koşmadık…", "Seni bekliyorum, 25 dakika yeter.", "Öğleden sonra oldu, başlayalım mı?"}; break;
+            case "sad": l = new String[]{"Bugün beni ahırda unuttun mu?", "Seri bozulmak üzere… 1 blok kurtarır.", "Havuçlarım bitti, hadi çalışalım."}; break;
+            case "sleep": l = new String[]{"Dinlenmek de çalışmanın parçası.", "İyi uykular, yarın erken koşarız.", "Zzz… yarın görüşürüz."}; break;
+            default: l = new String[]{"İyi gidiyoruz, bir blok daha?", "Başladık bile, şimdi bırakma!", "Hadi, bugün de birlikte koşalım."};
         }
         return l[Calendar.getInstance().get(Calendar.DAY_OF_MONTH) % l.length];
     }

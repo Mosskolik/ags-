@@ -581,7 +581,7 @@
     const md = window.Mascot ? window.Mascot.mood({ todayMin: tMin, goal: tGoal, yesterdayMin: minutesOn(dkey(addDays(today, -1))), hour: hr }) : null;
     return `
     <div class="hero card">
-      ${md ? `<div class="mascot" title="Hüdhüd">${window.Mascot.svg(md, 96, 'hero')}<span class="bubble">${esc(window.Mascot.line(md))}</span></div>` : ''}
+      ${md ? `<div class="mascot" title="Rüzgar">${window.Mascot.svg(md, 96, 'hero')}<span class="bubble">${esc(window.Mascot.line(md))}</span></div>` : ''}
       <div class="hero-text">
         <p class="eyebrow">${DAYS[dow(today)]}, ${fmtDate(today)}</p>
         <h2>${greet}${S.profile.name ? ', ' + esc(S.profile.name) : ''}</h2>
