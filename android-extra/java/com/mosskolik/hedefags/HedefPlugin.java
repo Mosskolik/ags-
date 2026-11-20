@@ -75,7 +75,8 @@ public class HedefPlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("tab", p.getString("openTab", ""));
         r.put("message", p.getString("openMsg", ""));
-        p.edit().remove("openTab").remove("openMsg").apply();
+        r.put("reason", p.getString("openReason", ""));
+        p.edit().remove("openTab").remove("openMsg").remove("openReason").apply();
         call.resolve(r);
     }
 

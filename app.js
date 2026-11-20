@@ -97,7 +97,11 @@
     const H = plugin('Hedef'); if (!H) return;
     try {
       const r = await H.takeLaunchTab();
-      if (r && r.tab) { location.hash = '#' + r.tab; if (r.message) setTimeout(() => toast(r.message, 6000), 300); }
+      if (r && r.tab) {
+        location.hash = '#' + r.tab;
+        if (r.reason && r.reason.startsWith('strict')) setTimeout(() => showStrictAngry(r.reason, r.message), 350);
+        else if (r.message) setTimeout(() => toast(r.message, 6000), 300);
+      }
     } catch (e) { /* yok */ }
   }
   async function nativeStatus() {
@@ -546,7 +550,7 @@
     const rain = ok || angry ? '' : `<div class="cloud">☁️${Array.from({ length: 6 }, (_, i) => `<b style="--x:${12 + i * 14}%;--d:${i * 0.25}s"></b>`).join('')}</div>`;
     openModal(`
       <div class="summary ${ok ? 'win' : angry ? 'angry' : 'lose'}">
-        ${angry ? '<div class="splat" aria-hidden="true"><svg viewBox="0 0 200 200"><path d="M100 30 C130 20 150 50 170 60 C190 70 180 100 186 120 C192 150 160 160 140 176 C120 192 90 180 70 182 C40 186 24 160 20 136 C14 110 8 84 30 62 C50 42 70 40 100 30 Z" fill="#DFF3FA" fill-opacity=".85"/><circle cx="40" cy="40" r="10" fill="#DFF3FA" fill-opacity=".85"/><circle cx="178" cy="36" r="7" fill="#DFF3FA" fill-opacity=".8"/><circle cx="186" cy="172" r="9" fill="#DFF3FA" fill-opacity=".8"/><path d="M80 178 q4 30 0 40 q-4 -10 0 -40z M130 172 q4 22 0 32 q-4 -10 0 -32z" fill="#DFF3FA" fill-opacity=".85"/><ellipse cx="80" cy="80" rx="18" ry="9" fill="#fff" opacity=".7" transform="rotate(-30 80 80)"/></svg></div>' : ''}
+        ${angry ? SPLAT_SVG : ''}
         <p class="eyebrow">${when} · Gün özeti</p>
         <div class="horse-anim">${conf}${rain}${angry ? '<span class="spit"></span>' : ''}${M ? M.svg(ok ? 'happy' : angry ? 'angry' : 'sad', 230, 'sum', mascotLook()) : ''}</div>
         <div class="stars" aria-label="${st} yıldız">${[1, 2, 3, 4, 5].map((i) => `<span class="${i <= st ? 'on' : ''}" style="--i:${i}">★</span>`).join('')}</div>
@@ -563,6 +567,32 @@
       </div>`, () => render());
     if (ok) sfx('neigh', 0.25); else if (angry) { sfx('snort', 0.1); sfx('spit', 1.05); } else sfx('sad', 0.3);
   }
+  const SPLAT_SVG = '<div class="splat" aria-hidden="true"><svg viewBox="0 0 200 200"><path d="M100 30 C130 20 150 50 170 60 C190 70 180 100 186 120 C192 150 160 160 140 176 C120 192 90 180 70 182 C40 186 24 160 20 136 C14 110 8 84 30 62 C50 42 70 40 100 30 Z" fill="#DFF3FA" fill-opacity=".85"/><circle cx="40" cy="40" r="10" fill="#DFF3FA" fill-opacity=".85"/><circle cx="178" cy="36" r="7" fill="#DFF3FA" fill-opacity=".8"/><circle cx="186" cy="172" r="9" fill="#DFF3FA" fill-opacity=".8"/><path d="M80 178 q4 30 0 40 q-4 -10 0 -40z M130 172 q4 22 0 32 q-4 -10 0 -32z" fill="#DFF3FA" fill-opacity=".85"/><ellipse cx="80" cy="80" rx="18" ry="9" fill="#fff" opacity=".7" transform="rotate(-30 80 80)"/></svg></div>';
+  const STRICT_QUOTES = [
+    'Ben burada senin için koşuyorum, sen video mu izliyorsun? Hadi, sayacı başlat!',
+    'Videolar bekleyebilir; AGS beklemez. Şimdi 25 dakika, sonra konuşuruz.',
+    'Söz vermiştin! Bu blok bitmeden ekran yok.',
+    'Sınav günü YouTube sana net vermeyecek. Ders kitabı verecek.',
+    'Kızdım ama hâlâ yanındayım. Başla, birlikte bitirelim.'
+  ];
+  /** Sıkı mod uygulamayı kapatıp geri getirdiğinde: at sinirlenir, tükürür ve sert bakar. */
+  function showStrictAngry(reason, message) {
+    if ($('#modal').open) return;
+    const M = window.Mascot; const name = esc(S.mascotName || 'Rüzgar');
+    const quote = STRICT_QUOTES[Math.floor(Date.now() / 60000) % STRICT_QUOTES.length];
+    openModal(`
+      <div class="summary angry strictmode">
+        ${SPLAT_SVG}
+        <p class="eyebrow">Sıkı mod · Odak bekçisi</p>
+        <div class="horse-anim"><span class="spit"></span>${M ? M.svg('angry', 230, 'strict', mascotLook()) : ''}</div>
+        <h3>${name} sana çok kızgın! 😤</h3>
+        <p class="strict-why">${esc(reason === 'strict-app' ? 'Uyarıya rağmen devam ettin, o uygulamayı kapattım.' : 'Bloğun başladı ama hâlâ çalışmaya başlamadın.')}</p>
+        <p class="sum-quote">${esc(quote)}</p>
+        <div class="btn-row end"><button class="btn" value="ok">Tamam, şimdi çalışıyorum</button></div>
+      </div>`, () => { location.hash = '#study'; render(); });
+    sfx('snort', 0.1); sfx('spit', 1.05);
+  }
+
   function summaryCard() {
     const k = pendingSummary(); if (!k) return '';
     return `<section class="card summary-cta"><div><b>⭐ ${k === dkey() ? 'Bugünün' : 'Dünün'} özeti hazır</b><p class="muted small">Kaç yıldız aldın? Değerlendirme bonusu havuçlarını topla.</p></div><button class="btn" data-act="daySummary" data-k="${k}">Özeti gör</button></section>`;
@@ -1675,5 +1705,5 @@
 
   initCloud();
   if (isNative) { scheduleNative(false); nativeSync(); takeLaunchTab(); setTimeout(() => renderWidgetMascots(), 1500); }
-  window.__hedef = { get state() { return S; }, generatePlan, coachMessages };
+  window.__hedef = { showStrictAngry, get state() { return S; }, generatePlan, coachMessages };
 })();

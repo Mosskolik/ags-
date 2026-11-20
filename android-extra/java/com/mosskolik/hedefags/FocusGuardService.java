@@ -250,7 +250,7 @@ public class FocusGuardService extends Service {
     /** Sıkı mod: dikkat dağıtan uygulamayı ekrandan kaldırır, arka plan işlemini kapatır ve çalışma ekranını açar. */
     private void enforce(final String pkg, String message) {
         removeOverlay();
-        HedefState.prefs(this).edit().putString("openTab", "study").putString("openMsg", message).apply();
+        HedefState.prefs(this).edit().putString("openTab", "study").putString("openMsg", message).putString("openReason", pkg != null && !pkg.isEmpty() ? "strict-app" : "strict-idle").apply();
         try {
             Intent open = new Intent(this, MainActivity.class);
             open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
