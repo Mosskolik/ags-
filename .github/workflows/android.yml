@@ -38,6 +38,10 @@ jobs:
         run: cd android && ./gradlew assembleDebug --no-daemon
       - name: APK'yı adlandır
         run: cp android/app/build/outputs/apk/debug/app-debug.apk hedef-ags.apk
+      - name: İmzayı doğrula (her sürüm aynı anahtarla imzalanmalı)
+        run: |
+          keytool -printcert -jarfile hedef-ags.apk | tee imza.txt
+          grep -q "D7:70:29:B4:6C:1F:D1:97:60:DB:01:C6:4F:09:F4:6D:E6:EF:9E:72:73:A0:02:10:37:07:31:B2:63:BE:82:44" imza.txt
       - uses: actions/upload-artifact@v4
         with:
           name: hedef-ags-apk

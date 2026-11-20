@@ -53,4 +53,23 @@ if (!x.includes('.FocusGuardService')) {
   x = x.replace('</manifest>', `${perms}\n${usage}\n</manifest>`);
 }
 fs.writeFileSync(mf, x);
+
+// Sabit imza: her sürüm depodaki aynı anahtarla imzalanır, böylece yeni sürüm eskisinin üstüne kurulur.
+const gradle = path.join(root, 'android/app/build.gradle');
+let gx = fs.readFileSync(gradle, 'utf8');
+if (!gx.includes('hedefSigning')) {
+  const signing = `
+    // hedefSigning
+    signingConfigs {
+        debug {
+            storeFile rootProject.file('../android-extra/signing/debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }`;
+  gx = gx.replace(/android \{\n/, (m) => m + signing + '\n');
+  gx = gx.replace(/buildTypes \{\n/, (m) => m + '        debug {\n            signingConfig signingConfigs.debug\n        }\n');
+  fs.writeFileSync(gradle, gx);
+}
 console.log('Android projesi yamalandı');
