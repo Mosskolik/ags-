@@ -16,8 +16,8 @@
 
         <ImageView
             android:id="@+id/w_mascot"
-            android:layout_width="96dp"
-            android:layout_height="92dp"
+            android:layout_width="124dp"
+            android:layout_height="118dp"
             android:contentDescription="Rüzgar"
             android:scaleType="fitCenter"
             android:src="@drawable/mascot_ok" />

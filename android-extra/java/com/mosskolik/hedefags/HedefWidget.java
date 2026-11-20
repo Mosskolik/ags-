@@ -98,7 +98,11 @@ public class HedefWidget extends AppWidgetProvider {
             next = "⏱ Çalışıyorsun: " + s.timerSubject();
         } else {
             JSONObject b = s.nextBlock();
-            next = b == null ? "Bugünkü bloklar tamam ✓" : "Sıradaki: " + b.optString("start") + " " + b.optString("name");
+            int missed = s.missedCount();
+            if (b != null) next = (missed > 0 ? "⚠ " + missed + " blok kaçtı · " : "") + "Sıradaki: " + b.optString("start") + " " + b.optString("name");
+            else if (s.todayBlocks().length() == 0) next = "Bugün dinlenme günü";
+            else if (s.allDone()) next = "Bugünkü bloklar tamam ✓";
+            else next = "⚠ " + missed + " blok kaçtı — 25 dk çalışarak telafi et";
         }
         v.setTextViewText(R.id.w_next, next);
         int st = s.streak();

@@ -73,25 +73,37 @@ public class ScheduleWidget extends AppWidgetProvider {
                 label = "BUGÜN";
                 title = "Dinlenme günü";
                 sub = "Kısa bir tekrar yine de iyi gelir.";
-            } else {
+            } else if (s.allDone()) {
                 label = "BUGÜN";
                 title = "Program tamam ✓";
                 sub = "Bugünkü bütün bloklar bitti. Tebrikler!";
+            } else {
+                int missed = s.missedCount();
+                label = "⚠ BUGÜN " + missed + " BLOK KAÇTI";
+                title = "Hâlâ telafi edebilirsin";
+                sub = "Şimdi 25 dakika çalış; gün bitmeden bir blok kurtar.";
             }
         }
         v.setTextViewText(R.id.s_label, label);
         v.setTextViewText(R.id.s_title, title);
         v.setTextViewText(R.id.s_sub, sub);
 
-        // günün listesi: bitenler ✓, şimdiki ▶
+        // günün listesi: yapılanlar ✓, şimdiki ▶, kaçanlar ✗, sıradakiler •
+        List<JSONObject> shown = new ArrayList<>(blocks);
+        if (shown.size() > ROWS.length) { // yer azsa önce yapılmışları gizle
+            List<JSONObject> notDone = new ArrayList<>();
+            for (JSONObject b : shown) if (!done.contains(b.optString("id"))) notDone.add(b);
+            if (!notDone.isEmpty()) shown = notDone;
+        }
         int row = 0;
-        for (JSONObject b : blocks) {
+        for (JSONObject b : shown) {
             if (row >= ROWS.length) break;
             boolean isDone = done.contains(b.optString("id"));
             boolean isNow = cur != null && cur.optString("id").equals(b.optString("id"));
-            String mark = isDone ? "✓ " : isNow ? "▶ " : "• ";
-            v.setTextViewText(ROWS[row], mark + b.optString("start") + "  " + b.optString("name") + " · " + b.optString("kind"));
-            v.setTextColor(ROWS[row], isNow ? 0xFFE0B24F : isDone ? 0x99FFFFFF : 0xFFFFFFFF);
+            boolean isMissed = !isDone && !isNow && HedefState.toMin(b.optString("start")) + b.optInt("minutes", 0) <= now;
+            String mark = isDone ? "✓ " : isNow ? "▶ " : isMissed ? "✗ " : "• ";
+            v.setTextViewText(ROWS[row], mark + b.optString("start") + "  " + b.optString("name") + " · " + b.optString("kind") + (isMissed ? " (kaçtı)" : ""));
+            v.setTextColor(ROWS[row], isNow ? 0xFFE0B24F : isDone ? 0x99FFFFFF : isMissed ? 0xFFF87171 : 0xFFFFFFFF);
             v.setViewVisibility(ROWS[row], android.view.View.VISIBLE);
             row++;
         }

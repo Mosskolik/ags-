@@ -126,6 +126,26 @@ public final class HedefState {
         return null;
     }
 
+    /** Saati geçmiş ama yapılmamış blok sayısı (sayaç çalışıyorsa şimdiki hariç). */
+    int missedCount() {
+        int now = nowMinutes(); Set<String> done = doneToday(); int n = 0;
+        JSONArray bl = todayBlocks();
+        for (int i = 0; i < bl.length(); i++) {
+            JSONObject b = bl.optJSONObject(i);
+            int end = toMin(b.optString("start")) + b.optInt("minutes", 0);
+            if (end <= now && !done.contains(b.optString("id"))) n++;
+        }
+        return n;
+    }
+
+    /** Bugünkü blokların hepsi gerçekten yapıldı mı? */
+    boolean allDone() {
+        JSONArray bl = todayBlocks(); if (bl.length() == 0) return false;
+        Set<String> done = doneToday();
+        for (int i = 0; i < bl.length(); i++) if (!done.contains(bl.optJSONObject(i).optString("id"))) return false;
+        return true;
+    }
+
     /** Sıradaki (henüz bitmemiş) blok */
     JSONObject nextBlock() {
         int now = nowMinutes();
