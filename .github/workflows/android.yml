@@ -1,0 +1,57 @@
+name: Android APK oluştur
+on:
+  push:
+    branches: [main, claude/peaceful-volta-b4zcw9]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Bağımlılıklar
+        run: npm ci --no-audit --no-fund
+      - name: Web dosyalarını hazırla
+        run: npm run www
+      - name: Android projesini oluştur
+        run: |
+          npx cap add android
+          npx capacitor-assets generate --android --iconBackgroundColor '#0f5c4d' --splashBackgroundColor '#0f5c4d' --splashBackgroundColorDark '#0f1412'
+          cp -r android-extra/res/. android/app/src/main/res/
+          # bildirim izinleri (Android 13+) ve tam zamanlı alarm (Android 12+)
+          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n</manifest>#' android/app/src/main/AndroidManifest.xml
+          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
+          npx cap sync android
+      - name: Sabit imza anahtarı (güncellemeler eskisinin üstüne kurulsun diye)
+        run: mkdir -p ~/.android && cp android-extra/signing/debug.keystore ~/.android/debug.keystore
+      - name: APK derle
+        run: cd android && ./gradlew assembleDebug --no-daemon
+      - name: APK'yı adlandır
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk hedef-ags.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hedef-ags-apk
+          path: hedef-ags.apk
+      - name: Sürüm olarak yayınla
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-v1.0.${{ github.run_number }}
+          name: Hedef AGS 1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: hedef-ags.apk
+          body: |
+            Android telefona kurmak için aşağıdaki **hedef-ags.apk** dosyasını indir ve aç.
+            İlk kurulumda "Bilinmeyen kaynaklardan yüklemeye izin ver" demen gerekir.

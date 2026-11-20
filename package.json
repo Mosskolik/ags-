@@ -1,0 +1,20 @@
+{
+  "name": "hedef-ags",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AGS, ÖABT ve yüksek lisans için çalışma koçu (Android)",
+  "scripts": {
+    "www": "rm -rf www && mkdir www && cp -r index.html styles.css data.js app.js manifest.webmanifest icons www/"
+  },
+  "dependencies": {
+    "@capacitor/android": "6.1.2",
+    "@capacitor/core": "6.1.2",
+    "@capacitor/filesystem": "6.0.1",
+    "@capacitor/local-notifications": "6.1.0",
+    "@capacitor/share": "6.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "6.1.2"
+  }
+}

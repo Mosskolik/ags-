@@ -25,6 +25,56 @@
   const net = (d, y) => (Number(d) || 0) - (Number(y) || 0) / 4;
   const round1 = (v) => Math.round(v * 10) / 10;
 
+  // --------------------------------------------------------- android (APK)
+  const Cap = window.Capacitor;
+  const isNative = !!(Cap && typeof Cap.isNativePlatform === 'function' && Cap.isNativePlatform());
+  const plugin = (n) => (isNative && Cap.Plugins ? Cap.Plugins[n] : null);
+  let nativeT = null;
+  function scheduleNativeSoon() { if (!isNative) return; clearTimeout(nativeT); nativeT = setTimeout(scheduleNative, 1200); }
+  /** Telefonun kendi alarm sistemine bildirim kurar: uygulama kapalıyken de çalar. */
+  async function scheduleNative(askPermission = false) {
+    const LN = plugin('LocalNotifications'); if (!LN) return 'none';
+    try {
+      const pend = await LN.getPending();
+      if (pend.notifications.length) await LN.cancel({ notifications: pend.notifications.map((n) => ({ id: n.id })) });
+      let perm = await LN.checkPermissions();
+      if (perm.display !== 'granted' && askPermission) perm = await LN.requestPermissions();
+      if (perm.display !== 'granted') return 'denied';
+      const R = S.reminders; const list = []; let id = 100;
+      const wd = (i) => (i === 6 ? 1 : i + 2); // Pzt=0 → Capacitor: Paz=1, Pzt=2 … Cmt=7
+      const at = (hhmm) => { const m = toMin(hhmm); return { hour: Math.floor(m / 60), minute: m % 60 }; };
+      const extra = { smallIcon: 'ic_stat_hedef', iconColor: '#0f5c4d' };
+      if (R.enabled) {
+        for (let i = 0; i < 7; i++) {
+          const bl = S.plan.blocks.filter((b) => b.dow === i).sort((a, b) => toMin(a.start) - toMin(b.start));
+          const goal = Math.round((S.profile.hours[i] || 0) * 60);
+          list.push({ id: id++, ...extra, title: 'Bugünkü planın hazır ☀️', body: bl.length ? `${bl.length} blok, toplam ${fmtMin(goal)}. İlk blok ${bl[0].start}: ${subjName(bl[0].subjectId)}.` : 'Bugün dinlenme günü. Kısa bir tekrar yine de iyi gelir.', schedule: { on: { weekday: wd(i), ...at(R.morning) }, allowWhileIdle: true } });
+          if (goal) list.push({ id: id++, ...extra, title: 'Gün sonu kontrolü 🌙', body: `Bugünkü hedefin ${fmtMin(goal)}. Çalışmalarını kaydettin mi? Seriyi bozmamak için 25 dakika bile yeter.`, schedule: { on: { weekday: wd(i), ...at(R.evening) }, allowWhileIdle: true } });
+          if (R.blocks) for (const b of bl) {
+            const m = Math.max(0, toMin(b.start) - 5);
+            list.push({ id: id++, ...extra, title: `${b.start} — ${subjName(b.subjectId)}`, body: `${KIND[b.kind] || ''} · ${b.minutes} dk. 5 dakika sonra başlıyor.`, schedule: { on: { weekday: wd(i), hour: Math.floor(m / 60), minute: m % 60 }, allowWhileIdle: true } });
+          }
+        }
+        for (const k of keyDates()) {
+          const when = addDays(parseD(k.d), -1); when.setHours(10, 0, 0, 0);
+          if (when > new Date()) list.push({ id: id++, ...extra, title: `Yarın: ${k.short}`, body: k.t, schedule: { at: when, allowWhileIdle: true } });
+        }
+      }
+      if (S.timer && S.timer.running && !S.timer.alerted) {
+        const end = new Date(S.timer.startedAt + S.timer.target * 60000 - S.timer.acc);
+        if (end > new Date()) list.push({ id: 1, ...extra, title: 'Blok tamamlandı ⏰', body: `${subjName(S.timer.subjectId)}: ${S.timer.target} dakika doldu. Kaydet ve mola ver.`, schedule: { at: end, allowWhileIdle: true } });
+      }
+      if (list.length) await LN.schedule({ notifications: list });
+      return 'ok';
+    } catch (e) { return 'error'; }
+  }
+  async function nativeShareFile(name, text) {
+    const FS = plugin('Filesystem'); const SH = plugin('Share'); if (!FS || !SH) return false;
+    const r = await FS.writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
+    await SH.share({ title: name, files: [r.uri], dialogTitle: 'Kaydet veya paylaş' });
+    return true;
+  }
+
   // ----------------------------------------------------------------- state
   function defaultState() {
     return {
@@ -89,6 +139,7 @@
     S.updatedAt = Date.now();
     try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* tarayıcı depolaması yok */ }
     if (cloud) { clearTimeout(cloudT); cloudT = setTimeout(pushCloud, 1500); }
+    scheduleNativeSoon();
   }
   async function pushCloud() {
     if (!cloud) return;
@@ -913,7 +964,7 @@
   // --------------------------------------------------------------- settings
   function vSettings() {
     const P = S.profile; const R = S.reminders;
-    const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+    const perm = isNative ? (S.reminders.enabled ? 'granted' : 'default') : 'Notification' in window ? Notification.permission : 'unsupported';
     return `
     <form class="card" data-form="profile">
       <div class="card-h"><h3>Profil ve hedef</h3></div>
@@ -940,13 +991,13 @@
       <label>Akşam kontrolü<input type="time" name="evening" value="${R.evening}"></label></div>
       <label class="switch"><input type="checkbox" name="blocks" ${R.blocks ? 'checked' : ''}> Her blok başlarken haber ver</label>
       <div class="btn-row end"><button type="button" class="btn ghost" data-act="testNotif">Test bildirimi</button><button class="btn">Kaydet</button></div>
-      <div class="note">
+      ${isNative ? `<div class="note">Bildirimler telefonunun kendi alarm sistemiyle kurulur: uygulama kapalıyken de gelir. Gelmezse telefon Ayarları → Uygulamalar → Hedef AGS → Bildirimler’i aç ve pil tasarrufu kısıtlamasını kaldır.</div>` : `<div class="note">
         <b>Önemli:</b> Tarayıcı bildirimleri uygulama açıkken ya da arka planda çalışırken gelir. Telefonun kapalıyken bile
         <b>kesin</b> hatırlatma almak için <button type="button" class="link-btn" data-act="ics">programını takvime aktar (.ics)</button> —
         her blok için 10 dk önce ve her akşam kontrol alarmı telefonunun kendi takviminde çalar.
         ${perm === 'denied' ? '<br>Bildirimler engellenmiş: tarayıcı ayarlarından bu site için izin ver.' : ''}
         ${/iPhone|iPad/.test(navigator.userAgent) && !window.navigator.standalone ? '<br>iPhone’da bildirim için önce Paylaş → “Ana Ekrana Ekle” ile uygulamayı kur.' : ''}
-      </div>
+      </div>`}
     </form>
 
     <form class="card" data-form="weights">
@@ -1025,7 +1076,7 @@
     try { if (swReg) await swReg.showNotification(title, opts); else new Notification(title, opts); } catch (e) { try { new Notification(title, opts); } catch (_) { /* yok */ } }
   }
   function checkReminders() {
-    const R = S.reminders; if (!R.enabled) return;
+    const R = S.reminders; if (!R.enabled || isNative) return; // APK'da telefonun alarmları kullanılır
     const now = new Date(); const k = dkey(now); const m = now.getHours() * 60 + now.getMinutes();
     const fire = (id, t, b) => { const key = `${k}|${id}`; if (R.fired[key]) return; R.fired[key] = 1; save(); notify(t, b, id); };
     const blocks = blocksFor(now);
@@ -1074,6 +1125,7 @@
     toast('Takvim dosyası indirildi — açıp takvimine ekle.');
   }
   async function download(name, text, type) {
+    if (isNative) { try { if (await nativeShareFile(name, text)) return; } catch (e) { if (!/cancel/i.test(String(e && e.message))) toast('Dosya paylaşılamadı.'); return; } }
     try {
       const dl = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('downloads') : null;
       if (dl) { await dl.save({ filename: name, data: new Blob([text], { type }) }); return; }
@@ -1147,6 +1199,13 @@
     },
     toggleTask(el) { const t = S.tasks.find((x) => x.id === el.dataset.id); t.done = !t.done; save(); render(); if (t.done) toast('Görev tamamlandı ✓'); },
     async testNotif() {
+      if (isNative) {
+        const LN = plugin('LocalNotifications'); if (!LN) return;
+        let perm = await LN.checkPermissions(); if (perm.display !== 'granted') perm = await LN.requestPermissions();
+        if (perm.display !== 'granted') return toast('Bildirim izni verilmedi. Telefon Ayarları → Uygulamalar → Hedef AGS → Bildirimler.');
+        await LN.schedule({ notifications: [{ id: 2, title: 'Hedef AGS', body: 'Bildirimler çalışıyor 🎉', smallIcon: 'ic_stat_hedef', iconColor: '#0f5c4d', schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true } }] });
+        return toast('5 saniye içinde bir test bildirimi gelecek. Uygulamayı kapatıp deneyebilirsin.', 4000);
+      }
       if (!('Notification' in window)) return toast('Bu tarayıcı bildirim desteklemiyor. Takvime aktarmayı kullan.');
       const p = await Notification.requestPermission();
       if (p === 'granted') notify('Hedef AGS', 'Bildirimler çalışıyor 🎉'); else toast('Bildirim izni verilmedi.');
@@ -1189,7 +1248,8 @@
       generatePlan(); toast('Kaydedildi, program güncellendi');
     } else if (form.dataset.form === 'reminders') {
       const R = S.reminders; R.enabled = !!f.enabled; R.morning = f.morning; R.evening = f.evening; R.blocks = !!f.blocks;
-      if (R.enabled && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().then(render);
+      if (isNative) scheduleNative(R.enabled).then((r) => { if (r === 'denied' && R.enabled) toast('Bildirim izni verilmedi; telefon ayarlarından izin ver.', 4000); });
+      else if (R.enabled && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().then(render);
       toast(R.enabled ? 'Hatırlatıcılar açık' : 'Hatırlatıcılar kapalı');
     } else if (form.dataset.form === 'weights') {
       for (const s of examSubjects()) s.weight = clamp(Number(f['w_' + s.id]) || 0, 0, 80);
@@ -1215,7 +1275,7 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { if (localStorage.getItem(KEY)) S = load(); } catch (e) { /* yok */ } render(); checkReminders(); } });
 
   // ------------------------------------------------------------------- boot
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  if (!isNative && 'serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').then((r) => { swReg = r; }).catch(() => {});
   }
   if (migrated) { migrated = false; save(); setTimeout(() => toast('Sınav tarihi ÖSYM takvimine göre güncellendi: AGS 8 Mayıs 2027', 5000), 400); }
@@ -1229,5 +1289,6 @@
   let lastDay = dkey(); setInterval(() => { if (dkey() !== lastDay) { lastDay = dkey(); render(); } }, 60000);
 
   initCloud();
+  if (isNative) scheduleNative(false);
   window.__hedef = { get state() { return S; }, generatePlan, coachMessages };
 })();

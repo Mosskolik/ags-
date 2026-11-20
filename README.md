@@ -23,7 +23,21 @@ aynı zamanda İlahiyat / Din Eğitimi yüksek lisansı yapanlar için hazırlan
 - **Kesin alarm için:** Program → *Takvime aktar*. İnen `.ics` dosyasını telefonun takvimine ekle;
   her blok için 10 dk önce ve her akşam alarm çalar — uygulama kapalı olsa bile.
 
-## Telefona / bilgisayara kurulum
+## Android uygulaması (APK)
+En güncel APK her zaman şu bağlantıda:
+**https://github.com/Mosskolik/ags-/releases/latest/download/hedef-ags.apk**
+
+1. Telefonda bağlantıyı aç, dosyayı indir ve aç.
+2. "Bilinmeyen kaynaklardan yüklemeye izin ver" sorusuna izin ver, **Yükle**'ye dokun.
+3. Uygulamada Ayarlar → Hatırlatıcılar → *Bildirimleri aç*. APK'da hatırlatmalar telefonun kendi
+   alarmıyla kurulur: uygulama kapalıyken de gelir.
+
+Kod `main`/geliştirme dalına her yüklendiğinde GitHub Actions yeni APK'yı derleyip yayınlar
+(`.github/workflows/android.yml`). Tüm sürümler aynı anahtarla imzalandığı için yeni sürüm
+eskisinin üstüne kurulur, veriler korunur. Bu anahtar (`android-extra/signing/debug.keystore`)
+herkese açık bir hata ayıklama anahtarıdır; APK'yı yalnızca bu depodan indir.
+
+## Telefona / bilgisayara kurulum (web)
 1. GitHub'da depo → **Settings → Pages → Source: GitHub Actions** seç (bir kez).
 2. `main` dalına birleştirince (ya da Actions sekmesinden çalıştırınca) site yayınlanır:
    `https://mosskolik.github.io/ags-/`

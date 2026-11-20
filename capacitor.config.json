@@ -1,0 +1,12 @@
+{
+  "appId": "com.mosskolik.hedefags",
+  "appName": "Hedef AGS",
+  "webDir": "www",
+  "backgroundColor": "#0f5c4d",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_hedef",
+      "iconColor": "#0f5c4d"
+    }
+  }
+}
