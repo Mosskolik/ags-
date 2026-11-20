@@ -87,9 +87,7 @@ public class HedefPlugin extends Plugin {
         r.put("guardRunning", FocusGuardService.running);
         r.put("calendar", getPermissionState("calendar") == PermissionState.GRANTED);
         r.put("canPinWidget", Build.VERSION.SDK_INT >= 26 && AppWidgetManager.getInstance(ctx()).isRequestPinAppWidgetSupported());
-        AppWidgetManager m = AppWidgetManager.getInstance(ctx());
-        int[] ids = m.getAppWidgetIds(new ComponentName(ctx(), HedefWidget.class));
-        r.put("widgets", ids == null ? 0 : ids.length);
+        r.put("widgets", HedefWidget.count(ctx()));
         call.resolve(r);
     }
 
@@ -126,7 +124,9 @@ public class HedefPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= 26) {
             AppWidgetManager m = AppWidgetManager.getInstance(ctx());
             if (m.isRequestPinAppWidgetSupported()) {
-                m.requestPinAppWidget(new ComponentName(ctx(), HedefWidget.class), null, null);
+                String kind = call.getString("kind", "mascot");
+                Class<?> provider = "schedule".equals(kind) ? ScheduleWidget.class : "countdown".equals(kind) ? CountdownWidget.class : HedefWidget.class;
+                m.requestPinAppWidget(new ComponentName(ctx(), provider), null, null);
                 call.resolve();
                 return;
             }

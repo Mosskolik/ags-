@@ -28,7 +28,16 @@ const perms = [
 const usage = '    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />';
 
 const components = `
-        <receiver android:name=".HedefWidget" android:exported="false" android:label="Hedef AGS">
+        <receiver android:name=".ScheduleWidget" android:exported="false" android:label="Hedef AGS · Ders programı">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_schedule_info" />
+        </receiver>
+        <receiver android:name=".CountdownWidget" android:exported="false" android:label="Hedef AGS · Geri sayım">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_countdown_info" />
+        </receiver>
+        <receiver android:name=".WidgetRefreshReceiver" android:exported="false" />
+        <receiver android:name=".HedefWidget" android:exported="false" android:label="Hedef AGS · Rüzgar">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_hedef_info" />
         </receiver>

@@ -49,7 +49,7 @@
           const bl = S.plan.blocks.filter((b) => b.dow === i).sort((a, b) => toMin(a.start) - toMin(b.start));
           const goal = Math.round((S.profile.hours[i] || 0) * 60);
           list.push({ id: id++, ...extra, title: 'Bugünkü planın hazır ☀️', body: bl.length ? `${bl.length} blok, toplam ${fmtMin(goal)}. İlk blok ${bl[0].start}: ${subjName(bl[0].subjectId)}.` : 'Bugün dinlenme günü. Kısa bir tekrar yine de iyi gelir.', schedule: { on: { weekday: wd(i), ...at(R.morning) }, allowWhileIdle: true } });
-          if (goal) list.push({ id: id++, ...extra, title: 'Gün sonu kontrolü 🌙', body: `Bugünkü hedefin ${fmtMin(goal)}. Çalışmalarını kaydettin mi? Seriyi bozmamak için 25 dakika bile yeter.`, schedule: { on: { weekday: wd(i), ...at(R.evening) }, allowWhileIdle: true } });
+          if (goal) list.push({ id: id++, ...extra, title: 'Gün özetin hazır ⭐', body: `Bugün kaç yıldız aldın? Hedefin ${fmtMin(goal)}. Uygulamayı aç, değerlendirme bonusu havuçlarını topla.`, schedule: { on: { weekday: wd(i), ...at(R.evening) }, allowWhileIdle: true } });
           if (R.blocks) for (const b of bl) {
             const m = Math.max(0, toMin(b.start) - 5);
             list.push({ id: id++, ...extra, title: `${b.start} — ${subjName(b.subjectId)}`, body: `${KIND[b.kind] || ''} · ${b.minutes} dk. 5 dakika sonra başlıyor.`, schedule: { on: { weekday: wd(i), hour: Math.floor(m / 60), minute: m % 60 }, allowWhileIdle: true } });
@@ -87,7 +87,7 @@
       todayMin: minutesOn(k), yesterdayMin: minutesOn(dkey(addDays(today, -1))), goals: S.profile.hours.map((h) => Math.round(h * 60)), streak: streak(),
       timerRunning: !!(S.timer && S.timer.running), timerSubject: S.timer ? (subj(S.timer.subjectId)?.short || '') : '',
       doneToday: Object.keys(S.done).filter((x) => x.startsWith(k + '|')).map((x) => x.slice(11)),
-      blocks: S.plan.blocks.map((b) => ({ id: b.id, dow: b.dow, start: b.start, minutes: b.minutes, name: subj(b.subjectId)?.short || subjName(b.subjectId) })),
+      blocks: S.plan.blocks.map((b) => ({ id: b.id, dow: b.dow, start: b.start, minutes: b.minutes, name: subj(b.subjectId)?.short || subjName(b.subjectId), full: subjName(b.subjectId), kind: KIND[b.kind] || '' })),
       guard: { enabled: !!g.enabled, mode: g.mode || 'blocks', apps: g.apps || [], strict: !!g.strict, graceMin: Number(g.graceMin) || 10, labels },
       quotes: window.QUOTES, coins: S.coins || 0, mascotName: S.mascotName || 'Rüzgar'
     };
@@ -186,7 +186,7 @@
       timer: null,
       guard: { enabled: false, mode: 'blocks', apps: ['com.google.android.youtube', 'com.instagram.android', 'com.zhiliaoapp.musically', 'com.ss.android.ugc.trill'], strict: false, graceMin: 10 },
       reviews: [], lastWeekly: null, updatedAt: 0,
-      coins: 0, earned: 0, owned: [], look: {}, mascotName: 'Rüzgar', awards: {}, coinLog: []
+      coins: 0, earned: 0, owned: [], look: {}, mascotName: 'Rüzgar', awards: {}, coinLog: [], dayRatings: {}, firstDay: null
     };
   }
 
@@ -205,6 +205,8 @@
     const d = defaultState();
     const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan }, guard: { ...d.guard, ...(s.guard || {}) }, look: { ...(s.look || {}) }, awards: { ...(s.awards || {}) } };
     // eski tahmini tarihi ÖSYM'nin açıkladığı resmi tarihle değiştir
+    m.dayRatings = { ...(s.dayRatings || {}) };
+    if (!m.firstDay) m.firstDay = (s.sessions || []).reduce((a, x) => (!a || x.date < a ? x.date : a), null) || null;
     if (m.profile.agsDate === OLD_DEFAULT_DATE) { m.profile.agsDate = '2027-05-08'; m.profile.oabtDate = '2027-05-09'; migrated = true; }
     return m;
   }
@@ -436,6 +438,136 @@
     S.plan = { blocks, generatedAt: new Date().toISOString() };
     save();
   }
+  // -------------------------------------------------------- gün özeti ⭐
+  const DAY_BONUS = [0, 2, 5, 10, 15, 25];
+  const DAY_TITLES = ['Bugün hiç koşmadık', 'Zor bir gündü', 'Biraz daha zorlayabilirdik', 'İyi bir gün', 'Çok iyi bir gün!', 'Muhteşem bir gün!'];
+  const WIN_QUOTES = [
+    'Bugün kendine verdiğin sözü tuttun. Yarın da aynı yoldan devam!',
+    '“Amellerin Allah katında en sevimlisi, az da olsa devamlı olanıdır.” Sen bugün devam ettin.',
+    'Her başarılı gün, sınav salonunda sana bir net olarak dönecek.',
+    'Rüzgar şahlandı, çünkü sen bugün dört nala koştun!',
+    'İstikrar yeteneği yener. Bugün istikrarlıydın.',
+    '“Şüphesiz zorlukla beraber bir kolaylık vardır.” Bugünün emeği yarının kolaylığı.'
+  ];
+  const LOSE_QUOTES = [
+    'Kötü bir gün, kötü bir hafta demek değil. Yarın ilk bloğu kaçırma, yeter.',
+    'Düşmek sorun değil; yerde kalmak sorun. Yarın kalkıyoruz!',
+    'Bugün az oldu ama sıfır değil. Yarın 25 dakikayla başla, gerisi gelir.',
+    '“Bir işi bitirince diğerine koyul.” Bugün bitti, yarına koyulalım.',
+    'Rüzgar biraz üzgün ama sana inanıyor. Yarın birlikte koşalım.',
+    'Hedefin hâlâ yerinde duruyor. Yarın ona bir adım daha yaklaş.'
+  ];
+  const ANGRY_QUOTES = [
+    'Rüzgar sinirlendi ama kin tutmaz: yarın bir blok yap, barışırız!',
+    'Tükürük silinir, kaybedilen gün geri gelmez. Yarın 25 dakikayla başla.',
+    'Bugün olmadı. Yarın ilk iş sayacı başlat; Rüzgar affetmeye hazır.',
+    'Sınav günü kimse “dün yorgundum” diye sormaz. Yarın kalkıyoruz!',
+    'Bir günlük boşluk seni durduramaz; ikinci günü boş bırakmamak yeter.'
+  ];
+  // ---- ses efektleri (Web Audio ile üretilir, dosya gerekmez)
+  let actx = null;
+  function audio() {
+    if (S.profile.sfx === false) return null;
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) { actx = null; }
+    return actx;
+  }
+  function noise(a, t, dur, freq, vol, type = 'bandpass') {
+    const n = Math.floor(a.sampleRate * dur); const buf = a.createBuffer(1, n, a.sampleRate); const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const src = a.createBufferSource(); src.buffer = buf; const f = a.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+    const g = a.createGain(); g.gain.value = vol; src.connect(f); f.connect(g); g.connect(a.destination); src.start(t);
+  }
+  function sfx(kind, delay = 0) {
+    const a = audio(); if (!a) return; const t = a.currentTime + 0.02 + delay;
+    try {
+      if (kind === 'neigh') { // kişneme: titreşimli, yükselip alçalan ses + sonunda burun sesi
+        const o = a.createOscillator(); o.type = 'sawtooth'; const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 1.3;
+        const g = a.createGain(); const lfo = a.createOscillator(); const lg = a.createGain();
+        lfo.frequency.setValueAtTime(9, t); lfo.frequency.linearRampToValueAtTime(15, t + 1.1); lg.gain.value = 70; lfo.connect(lg); lg.connect(o.frequency);
+        o.frequency.setValueAtTime(600, t); o.frequency.linearRampToValueAtTime(1000, t + 0.2); o.frequency.exponentialRampToValueAtTime(420, t + 1.2);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 0.06); g.gain.setValueAtTime(0.2, t + 0.9); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+        o.connect(f); f.connect(g); g.connect(a.destination); o.start(t); lfo.start(t); o.stop(t + 1.35); lfo.stop(t + 1.35);
+        noise(a, t + 1.35, 0.3, 800, 0.16);
+      } else if (kind === 'spit') { // "tuh" + fışş + şap
+        const o = a.createOscillator(); o.type = 'sine'; const g = a.createGain();
+        o.frequency.setValueAtTime(260, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+        g.gain.setValueAtTime(0.35, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.16);
+        noise(a, t + 0.03, 0.22, 3200, 0.22, 'highpass');
+        noise(a, t + 0.5, 0.18, 450, 0.32);
+      } else if (kind === 'snort') {
+        noise(a, t, 0.35, 650, 0.2); noise(a, t + 0.45, 0.3, 600, 0.18);
+      } else if (kind === 'sad') {
+        [440, 392, 330].forEach((fr, i) => {
+          const o = a.createOscillator(); o.type = 'triangle'; const g = a.createGain(); const s0 = t + i * 0.34;
+          o.frequency.setValueAtTime(fr, s0); o.frequency.linearRampToValueAtTime(fr * 0.94, s0 + 0.3);
+          g.gain.setValueAtTime(0.0001, s0); g.gain.exponentialRampToValueAtTime(0.14, s0 + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, s0 + 0.42);
+          o.connect(g); g.connect(a.destination); o.start(s0); o.stop(s0 + 0.45);
+        });
+      }
+    } catch (e) { /* ses yok */ }
+  }
+  function daySummary(k) {
+    const d = parseD(k); const goal = goalOn(d); const min = minutesOn(k);
+    const sess = S.sessions.filter((x) => x.date === k);
+    const q = sess.reduce((a, x) => a + (x.questions || 0), 0);
+    const c = sess.reduce((a, x) => a + (x.correct || 0), 0);
+    const w = sess.reduce((a, x) => a + (x.wrong || 0), 0);
+    const bl = blocksFor(d); const bd = bl.filter((b) => S.done[`${k}|${b.id}`]).length;
+    const earned = (S.coinLog || []).filter((x) => x.d === k && !/^Gün değerlendirmesi/.test(x.why)).reduce((a, x) => a + x.n, 0);
+    let stars;
+    if (!goal) stars = min > 0 ? 5 : 3; // dinlenme günü: dinlenmek de başarı
+    else if (min === 0) stars = 0;
+    else {
+      const r = Math.min(1, min / goal);
+      let sc = r * 4 + (bl.length ? (bd / bl.length) * 0.5 : r * 0.5);
+      if (q >= 20 && c / Math.max(1, c + w) >= 0.7) sc += 0.5;
+      stars = clamp(Math.round(sc), 1, 5);
+    }
+    return { k, goal, min, sessions: sess.length, q, c, w, bl: bl.length, bd, earned, stars, bonus: DAY_BONUS[stars], rest: !goal };
+  }
+  /** Değerlendirilmeyi bekleyen gün: dün (henüz bakılmadıysa) ya da akşam saatinden sonra bugün. */
+  function pendingSummary() {
+    if (!S.profile.onboarded) return null; S.dayRatings = S.dayRatings || {};
+    const y = dkey(addDays(new Date(), -1));
+    if (!S.dayRatings[y] && S.firstDay && y >= S.firstDay) return y;
+    const t = dkey(); const now = new Date();
+    if (!S.dayRatings[t] && now.getHours() * 60 + now.getMinutes() >= toMin(S.reminders.evening || '21:30')) return t;
+    return null;
+  }
+  function showDaySummary(k) {
+    S.dayRatings = S.dayRatings || {};
+    const sm = daySummary(k); const fresh = !S.dayRatings[k];
+    if (fresh) { S.dayRatings[k] = { stars: sm.stars, bonus: sm.bonus, min: sm.min }; if (sm.bonus) award(sm.bonus, `Gün değerlendirmesi ${'★'.repeat(sm.stars)}`); save(); }
+    const st = S.dayRatings[k].stars; const ok = st >= 3; const angry = !ok && st < 2 && !sm.rest;
+    const quotes = ok ? WIN_QUOTES : angry ? ANGRY_QUOTES : LOSE_QUOTES; const quote = quotes[(parseD(k).getDate() + st) % quotes.length];
+    const when = k === dkey() ? 'Bugün' : k === dkey(addDays(new Date(), -1)) ? 'Dün' : fmtDate(parseD(k));
+    const M = window.Mascot;
+    const conf = ok ? Array.from({ length: 16 }, (_, i) => `<i style="--x:${(i * 37) % 100}%;--d:${(i % 5) * 0.18}s;--c:${['#E0B24F', '#3FB59A', '#F472B6', '#60A5FA'][i % 4]}"></i>`).join('') : '';
+    const rain = ok || angry ? '' : `<div class="cloud">☁️${Array.from({ length: 6 }, (_, i) => `<b style="--x:${12 + i * 14}%;--d:${i * 0.25}s"></b>`).join('')}</div>`;
+    openModal(`
+      <div class="summary ${ok ? 'win' : angry ? 'angry' : 'lose'}">
+        ${angry ? '<div class="splat" aria-hidden="true"><svg viewBox="0 0 200 200"><path d="M100 30 C130 20 150 50 170 60 C190 70 180 100 186 120 C192 150 160 160 140 176 C120 192 90 180 70 182 C40 186 24 160 20 136 C14 110 8 84 30 62 C50 42 70 40 100 30 Z" fill="#DFF3FA" fill-opacity=".85"/><circle cx="40" cy="40" r="10" fill="#DFF3FA" fill-opacity=".85"/><circle cx="178" cy="36" r="7" fill="#DFF3FA" fill-opacity=".8"/><circle cx="186" cy="172" r="9" fill="#DFF3FA" fill-opacity=".8"/><path d="M80 178 q4 30 0 40 q-4 -10 0 -40z M130 172 q4 22 0 32 q-4 -10 0 -32z" fill="#DFF3FA" fill-opacity=".85"/><ellipse cx="80" cy="80" rx="18" ry="9" fill="#fff" opacity=".7" transform="rotate(-30 80 80)"/></svg></div>' : ''}
+        <p class="eyebrow">${when} · Gün özeti</p>
+        <div class="horse-anim">${conf}${rain}${angry ? '<span class="spit"></span>' : ''}${M ? M.svg(ok ? 'happy' : angry ? 'angry' : 'sad', 230, 'sum', mascotLook()) : ''}</div>
+        <div class="stars" aria-label="${st} yıldız">${[1, 2, 3, 4, 5].map((i) => `<span class="${i <= st ? 'on' : ''}" style="--i:${i}">★</span>`).join('')}</div>
+        <h3>${sm.rest ? (st === 5 ? 'Dinlenme gününde bile çalıştın!' : 'Dinlenme günü') : angry ? `${esc(S.mascotName || 'Rüzgar')} çok sinirli! 😤` : DAY_TITLES[st]}</h3>
+        <p class="sum-quote">${esc(quote)}</p>
+        <ul class="sum-stats">
+          <li><span>Çalışma</span><b>${fmtMin(sm.min)}${sm.goal ? ` / ${fmtMin(sm.goal)}` : ''}</b></li>
+          <li><span>Bloklar</span><b>${sm.bd} / ${sm.bl}</b></li>
+          <li><span>Soru</span><b>${sm.q}${sm.c + sm.w ? ` · %${Math.round((100 * sm.c) / (sm.c + sm.w))} doğru` : ''}</b></li>
+          <li><span>Gün içinde kazanılan</span><b>${sm.earned} 🥕</b></li>
+          <li class="bonus"><span>Değerlendirme bonusu</span><b>+${S.dayRatings[k].bonus} 🥕</b></li>
+        </ul>
+        <div class="btn-row end"><button class="btn" value="ok">${ok ? 'Harika, devam!' : angry ? 'Tamam, yarın çalışacağım!' : 'Yarın daha iyi olacak'}</button></div>
+      </div>`, () => render());
+    if (ok) sfx('neigh', 0.25); else if (angry) { sfx('snort', 0.1); sfx('spit', 1.05); } else sfx('sad', 0.3);
+  }
+  function summaryCard() {
+    const k = pendingSummary(); if (!k) return '';
+    return `<section class="card summary-cta"><div><b>⭐ ${k === dkey() ? 'Bugünün' : 'Dünün'} özeti hazır</b><p class="muted small">Kaç yıldız aldın? Değerlendirme bonusu havuçlarını topla.</p></div><button class="btn" data-act="daySummary" data-k="${k}">Özeti gör</button></section>`;
+  }
+
   const KIND = { konu: 'Konu çalışması', soru: 'Soru çözümü', tekrar: 'Tekrar', deneme: 'Deneme (80 soru / 110 dk)', yazım: 'Tez yazımı / okuma', okuma: 'Ders okuması / ödev' };
   function blocksFor(d) { return S.plan.blocks.filter((b) => b.dow === dow(d)).sort((a, b) => toMin(a.start) - toMin(b.start)); }
   const isDone = (d, b) => !!S.done[`${dkey(d)}|${b.id}`];
@@ -635,6 +767,7 @@
       <div class="stat card"><small>Bugün blok</small><b>${doneN}</b><span>/ ${blocks.length}</span></div>
     </div>
 
+    ${summaryCard()}
     ${datesCard()}
     <div class="two-col">
       <section class="card">
@@ -994,6 +1127,11 @@
     </section>
     ${(S.reviews || []).length ? `<section class="card"><div class="card-h"><h3>Değerlendirme geçmişi</h3></div><ul class="journal">${[...S.reviews].reverse().slice(0, 6).map((r) => `<li><small class="muted">${fmtDate(parseD(r.date))} · enerji ${'●'.repeat(r.energy)}${'○'.repeat(5 - r.energy)}</small>${r.good ? `<p>✅ ${esc(r.good)}</p>` : ''}${r.hard ? `<p>⚠️ ${esc(r.hard)}</p>` : ''}${r.next ? `<p>🎯 ${esc(r.next)}</p>` : ''}</li>`).join('')}</ul></section>` : ''}
     <section class="card">
+      <div class="card-h"><h3>Gün değerlendirmeleri</h3><span class="muted small">5 yıldız üzerinden</span></div>
+      <div class="week-stars">${[6, 5, 4, 3, 2, 1, 0].map((i) => { const d = addDays(new Date(), -i); const k = dkey(d); const r = (S.dayRatings || {})[k];
+        return `<div><small class="muted">${DAYS_S[dow(d)]}</small><span class="ws">${r ? '★'.repeat(r.stars) + '<i>' + '★'.repeat(5 - r.stars) + '</i>' : '<i>—</i>'}</span></div>`; }).join('')}</div>
+    </section>
+    <section class="card">
       <div class="card-h"><h3>Son 14 gün</h3><span class="legend"><span><i style="background:var(--accent)"></i>çalışılan</span><span><i class="goal-i"></i>hedef</span></span></div>
       ${barsHTML(bars)}
     </section>
@@ -1112,6 +1250,7 @@
       <div class="field-row"><label>Sabah planı<input type="time" name="morning" value="${R.morning}"></label>
       <label>Akşam kontrolü<input type="time" name="evening" value="${R.evening}"></label></div>
       <label class="switch"><input type="checkbox" name="blocks" ${R.blocks ? 'checked' : ''}> Her blok başlarken haber ver</label>
+      <label class="switch"><input type="checkbox" name="sfx" ${S.profile.sfx !== false ? 'checked' : ''}> Ses efektleri (kişneme, tükürme…)</label>
       <div class="btn-row end"><button type="button" class="btn ghost" data-act="testNotif">Test bildirimi</button><button class="btn">Kaydet</button></div>
       ${isNative ? `<div class="note">Bildirimler telefonunun kendi alarm sistemiyle kurulur: uygulama kapalıyken de gelir. Gelmezse telefon Ayarları → Uygulamalar → Hedef AGS → Bildirimler’i aç ve pil tasarrufu kısıtlamasını kaldır.</div>` : `<div class="note">
         <b>Önemli:</b> Tarayıcı bildirimleri uygulama açıkken ya da arka planda çalışırken gelir. Telefonun kapalıyken bile
@@ -1144,9 +1283,13 @@
     const g = S.guard;
     return `
     <section class="card">
-      <div class="card-h"><h3>Ana ekran widget’ı</h3><span class="chip" id="st-widget">…</span></div>
-      <p class="muted small">Sınava kalan gün, bugünkü ilerleme, sıradaki blok ve günün sözü ana ekranında görünür.</p>
-      <div class="btn-row"><button type="button" class="btn" data-act="pinWidget">Ana ekrana ekle</button></div>
+      <div class="card-h"><h3>Ana ekran widget’ları</h3><span class="chip" id="st-widget">…</span></div>
+      <p class="muted small">Üç farklı widget var; istediğini ana ekranına ekle:</p>
+      <div class="widget-list">
+        <div><b>🐴 ${esc(S.mascotName || 'Rüzgar')}</b><small class="muted">Ruh hâli değişen maskot, ilerleme, günün sözü</small><button type="button" class="btn sm" data-act="pinWidget" data-kind="mascot">Ekle</button></div>
+        <div><b>📅 Ders programı</b><small class="muted">Şu an ne çalışman gerektiği ve günün sıradaki blokları</small><button type="button" class="btn sm" data-act="pinWidget" data-kind="schedule">Ekle</button></div>
+        <div><b>⏳ Geri sayım</b><small class="muted">Küçük boy: AGS’ye kalan gün, bugünkü süre, seri ve havuç</small><button type="button" class="btn sm" data-act="pinWidget" data-kind="countdown">Ekle</button></div>
+      </div>
       <p class="muted small">Buton çalışmazsa: ana ekranda boş bir yere basılı tut → Widget’lar → Hedef AGS.</p>
     </section>
 
@@ -1192,7 +1335,7 @@
     const look = mascotLook(); const today = new Date();
     const md = M.mood({ todayMin: minutesOn(dkey(today)), goal: goalOn(today), yesterdayMin: minutesOn(dkey(addDays(today, -1))), hour: today.getHours() });
     const owned = new Set(S.owned || []);
-    const list = M.ITEMS.filter((i) => i.cat === shopCat);
+    const list = M.ITEMS.filter((i) => i.cat === shopCat).sort((a, b) => a.price - b.price);
     const isOn = (i) => look[i.cat] === i.id;
     const log = (S.coinLog || []).slice(0, 6);
     return `
@@ -1271,8 +1414,8 @@
     (v, f) => {
       const P = S.profile; P.name = f.name.trim(); P.agsDate = f.agsDate || P.agsDate;
       const wd = Number(f.wd) || 0, we = Number(f.we) || 0; P.hours = [wd, wd, wd, wd, wd, we, we];
-      P.startTime = f.startTime || P.startTime; P.ylShare = clamp(Number(f.ylShare) || 0, 0, 80); P.onboarded = true;
-      generatePlan(); save(); render(); toast('Programın hazır! 🎯');
+      P.startTime = f.startTime || P.startTime; P.ylShare = clamp(Number(f.ylShare) || 0, 0, 80); P.onboarded = true; if (!S.firstDay) S.firstDay = dkey();
+      generatePlan(); save(); render(); toast('Programın hazır! 🎯'); setTimeout(welcomeGift, 2600);
     });
   }
 
@@ -1420,6 +1563,7 @@
       if (p === 'granted') notify('Hedef AGS', 'Bildirimler çalışıyor 🎉'); else toast('Bildirim izni verilmedi.');
       render();
     },
+    daySummary(el) { showDaySummary(el.dataset.k); },
     shopCat(el) { shopCat = el.dataset.c; render(); },
     buy(el) {
       const i = window.Mascot.item(el.dataset.id); if (!i) return;
@@ -1434,7 +1578,7 @@
       const look = { ...mascotLook() }; if (look[i.cat] === i.id) delete look[i.cat]; else look[i.cat] = i.id;
       S.look = look; save(); render(); renderWidgetMascots();
     },
-    async pinWidget() { const H = plugin('Hedef'); try { await H.pinWidget(); } catch (e) { toast('Ana ekranda boş yere basılı tut → Widget’lar → Hedef AGS', 5000); } },
+    async pinWidget(el) { const H = plugin('Hedef'); try { await H.pinWidget({ kind: el.dataset.kind || 'mascot' }); } catch (e) { toast('Ana ekranda boş yere basılı tut → Widget’lar → Hedef AGS', 5000); } },
     phoneAlarms() { setPhoneAlarms(); },
     phoneCalendar() { addToPhoneCalendar(); },
     async phoneCalendarRemove() { const H = plugin('Hedef'); try { await H.removeCalendarEvents(); toast('Hedef AGS etkinlikleri takvimden kaldırıldı'); } catch (e) { /* yok */ } },
@@ -1477,7 +1621,7 @@
       P.block = clamp(Number(f.block) || 50, 20, 120); P.brk = clamp(Number(f.brk) || 0, 0, 30);
       generatePlan(); toast('Kaydedildi, program güncellendi');
     } else if (form.dataset.form === 'reminders') {
-      const R = S.reminders; R.enabled = !!f.enabled; R.morning = f.morning; R.evening = f.evening; R.blocks = !!f.blocks;
+      const R = S.reminders; R.enabled = !!f.enabled; R.morning = f.morning; R.evening = f.evening; R.blocks = !!f.blocks; S.profile.sfx = !!f.sfx;
       if (isNative) scheduleNative(R.enabled).then((r) => { if (r === 'denied' && R.enabled) toast('Bildirim izni verilmedi; telefon ayarlarından izin ver.', 4000); });
       else if (R.enabled && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().then(render);
       toast(R.enabled ? 'Hatırlatıcılar açık' : 'Hatırlatıcılar kapalı');
@@ -1517,6 +1661,10 @@
   }
   if (migrated) { migrated = false; save(); setTimeout(() => toast('Sınav tarihi ÖSYM takvimine göre güncellendi: AGS 8 Mayıs 2027', 5000), 400); }
   if (S.profile.onboarded && !S.plan.blocks.length) generatePlan();
+  function welcomeGift() { S.awards = S.awards || {}; if (S.awards.welcome) return; S.awards.welcome = 1; award(30, 'Hoş geldin hediyesi'); save(); }
+  if (S.profile.onboarded) setTimeout(welcomeGift, 1200);
+  if (S.profile.onboarded && !S.firstDay) { S.firstDay = dkey(); save(); }
+  setTimeout(() => { const k = pendingSummary(); if (k && k !== dkey() && !$('#modal').open) showDaySummary(k); }, 2200);
   render();
   if (!S.profile.onboarded) onboarding();
   setInterval(() => { renderTimerChip(); if (current === 'study') tickTimer(); else if (S.timer && S.timer.running && !S.timer.alerted && timerElapsed() >= S.timer.target * 60000) tickTimerBackground(); }, 1000);

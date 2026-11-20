@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_desc">AGS geri sayımı, bugünkü ilerleme ve sıradaki blok</string>
+    <string name="widget_desc">Rüzgar: ruh hâli değişen maskot, ilerleme ve günün sözü</string>
+    <string name="widget_schedule_desc">Ders programı: şu an ne çalışmalısın ve sıradaki bloklar</string>
+    <string name="widget_countdown_desc">Geri sayım: AGS’ye kalan gün, bugünkü süre, seri ve havuç</string>
 </resources>

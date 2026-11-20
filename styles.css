@@ -359,3 +359,62 @@ a.mascot { color: inherit; text-decoration: none; }
   @keyframes gallop { from { transform: translateY(0) rotate(-2deg); } to { transform: translateY(-6px) rotate(2deg); } }
 }
 @media (max-width: 640px) { .shop-hero { grid-template-columns: 1fr; } .stage svg { max-width: 220px; } }
+.widget-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.widget-list > div { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.widget-list b { grid-column: 1; } .widget-list small { grid-column: 1; } .widget-list .btn { grid-column: 2; grid-row: 1 / span 2; }
+
+/* gün özeti */
+.summary-cta { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--surface)); }
+.summary { text-align: center; }
+.summary .eyebrow { margin: 0; }
+.horse-anim { position: relative; height: 210px; display: grid; place-items: end center; overflow: hidden; margin: 4px 0 6px; }
+.horse-anim svg { width: 230px; height: auto; position: relative; z-index: 1; }
+.summary .stars { display: flex; justify-content: center; gap: 6px; font-size: 2.2rem; line-height: 1; }
+.summary .stars span { color: var(--line); }
+.summary .stars span.on { color: var(--gold); }
+.summary h3 { margin: 8px 0 4px; }
+.sum-quote { font-style: italic; color: var(--muted); max-width: 40ch; margin: 0 auto 10px; }
+.sum-stats { list-style: none; padding: 0; margin: 0 0 4px; text-align: left; }
+.sum-stats li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 2px; border-bottom: 1px solid var(--line); font-size: .93rem; }
+.sum-stats li.bonus { color: var(--accent); font-weight: 700; border-bottom: 0; }
+.horse-anim > i { position: absolute; top: -12px; left: var(--x); width: 7px; height: 12px; background: var(--c); border-radius: 2px; z-index: 2; opacity: 0; }
+.cloud { position: absolute; top: 4px; left: 50%; margin-left: 10px; font-size: 3rem; z-index: 2; width: 90px; }
+.cloud b { position: absolute; top: 46px; left: var(--x); width: 3px; height: 10px; border-radius: 2px; background: #7CC4E8; opacity: 0; }
+.week-stars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; text-align: center; }
+.week-stars > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 2px; border-radius: 10px; background: var(--surface-2); }
+.week-stars .ws { color: var(--gold); font-size: .78rem; letter-spacing: -1px; word-break: break-all; }
+.week-stars .ws i { color: var(--line); font-style: normal; }
+@media (prefers-reduced-motion: no-preference) {
+  .summary .stars span.on { animation: star .5s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: calc(var(--i) * .15s + .3s); }
+  @keyframes star { from { transform: scale(0) rotate(-40deg); } to { transform: scale(1) rotate(0); } }
+  .summary.win .horse-anim svg { transform-origin: 22% 94%; animation: rear 1.5s ease-in-out .2s 2, hopwin 1.2s ease-in-out 3.3s infinite; }
+  @keyframes rear {
+    0%, 100% { transform: rotate(0) translateY(0); }
+    25% { transform: rotate(-26deg) translateY(-6px); }
+    45% { transform: rotate(-30deg) translateY(-8px); }
+    65% { transform: rotate(-22deg) translateY(-4px); }
+  }
+  @keyframes hopwin { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .summary.win .horse-anim > i { animation: confetti 2.2s ease-in var(--d) infinite; }
+  @keyframes confetti { 0% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: 0; transform: translateY(230px) rotate(540deg); } }
+  .summary.lose .horse-anim svg { transform-origin: 50% 100%; animation: droop 2.6s ease-in-out infinite alternate; }
+  @keyframes droop { from { transform: translateY(0) rotate(0); } to { transform: translateY(5px) rotate(3deg) scaleY(.97); } }
+  .cloud b { animation: rain 1.2s linear var(--d) infinite; }
+  @keyframes rain { 0% { opacity: .9; transform: translateY(0); } 100% { opacity: 0; transform: translateY(60px); } }
+}
+
+/* sinirli at: tükürme */
+.summary { position: relative; }
+.horse-anim .spit { position: absolute; left: calc(50% + 78px); top: 96px; width: 14px; height: 14px; border-radius: 50%; background: #CFEAF5; box-shadow: 0 0 0 2px #fff inset; z-index: 3; opacity: 0; }
+.splat { position: absolute; left: 50%; top: 40%; width: 260px; height: 260px; margin: -130px 0 0 -130px; z-index: 5; pointer-events: none; opacity: 0; }
+.splat svg { width: 100%; height: 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  .summary.angry .horse-anim svg { transform-origin: 30% 95%; animation: windup 1.2s ease-in-out .1s 1 both, fume .25s ease-in-out 1.3s 8 alternate; }
+  @keyframes windup { 0% { transform: rotate(0); } 60% { transform: rotate(6deg) translateX(-6px); } 85% { transform: rotate(-5deg) translateX(8px); } 100% { transform: rotate(0); } }
+  @keyframes fume { from { transform: translateX(-1.5px); } to { transform: translateX(1.5px); } }
+  .summary.angry .horse-anim .spit { animation: spit .45s cubic-bezier(.4, 0, 1, 1) 1.05s 1 both; }
+  @keyframes spit { 0% { opacity: 1; transform: translate(0, 0) scale(.6); } 100% { opacity: 1; transform: translate(-90px, 40px) scale(9); } }
+  .summary.angry .splat { animation: splat 4.5s ease-out 1.45s 1 both; }
+  @keyframes splat { 0% { opacity: 0; transform: scale(.4); } 6% { opacity: 1; transform: scale(1.08); } 12% { transform: scale(1); } 70% { opacity: .9; transform: translateY(14px); } 100% { opacity: 0; transform: translateY(40px); } }
+}
+@media (prefers-reduced-motion: reduce) { .splat { display: none; } }

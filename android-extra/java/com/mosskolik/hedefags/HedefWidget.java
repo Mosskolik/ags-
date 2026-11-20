@@ -16,10 +16,38 @@ public class HedefWidget extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
-        for (int id : ids) manager.updateAppWidget(id, build(context));
+        updateAll(context);
     }
 
+    /** Uygulamayı belirli bir sekmede açan dokunma eylemi. */
+    static PendingIntent openIntent(Context context, String tab, int requestCode) {
+        Intent open = new Intent(context, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        open.putExtra("tab", tab);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
+        return PendingIntent.getActivity(context, requestCode, open, flags);
+    }
+
+    /** Üç widget türünü de günceller ve bir sonraki yenilemeyi kurar. */
     static void updateAll(Context context) {
+        updateMascot(context);
+        ScheduleWidget.update(context);
+        CountdownWidget.update(context);
+        WidgetRefreshReceiver.scheduleNext(context);
+    }
+
+    static int count(Context context) {
+        AppWidgetManager m = AppWidgetManager.getInstance(context);
+        int n = 0;
+        for (Class<?> c : new Class<?>[]{HedefWidget.class, ScheduleWidget.class, CountdownWidget.class}) {
+            int[] ids = m.getAppWidgetIds(new ComponentName(context, c));
+            if (ids != null) n += ids.length;
+        }
+        return n;
+    }
+
+    static void updateMascot(Context context) {
         try {
             AppWidgetManager m = AppWidgetManager.getInstance(context);
             int[] ids = m.getAppWidgetIds(new ComponentName(context, HedefWidget.class));
@@ -79,11 +107,7 @@ public class HedefWidget extends AppWidgetProvider {
 
         v.setTextViewText(R.id.w_quote, s.quoteOfDay());
 
-        Intent open = new Intent(context, MainActivity.class);
-        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
-        v.setOnClickPendingIntent(R.id.w_root, PendingIntent.getActivity(context, 0, open, flags));
+        v.setOnClickPendingIntent(R.id.w_root, openIntent(context, "ahir", 9));
         return v;
     }
 }
