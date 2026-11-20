@@ -23,7 +23,10 @@ const perms = [
   'android.permission.READ_CALENDAR',
   'android.permission.WRITE_CALENDAR',
   'com.android.alarm.permission.SET_ALARM',
-  'android.permission.KILL_BACKGROUND_PROCESSES'
+  'android.permission.KILL_BACKGROUND_PROCESSES',
+  'android.permission.USE_EXACT_ALARM',
+  'android.permission.USE_FULL_SCREEN_INTENT',
+  'android.permission.VIBRATE'
 ].map((p) => `    <uses-permission android:name="${p}" />`).join('\n');
 const usage = '    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />';
 
@@ -37,6 +40,7 @@ const components = `
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_countdown_info" />
         </receiver>
         <receiver android:name=".WidgetRefreshReceiver" android:exported="false" />
+        <receiver android:name=".TimerAlarmReceiver" android:exported="false" />
         <service android:name=".MediaWatchService" android:exported="true" android:label="Hedef AGS · Ders videosu kontrolü" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>

@@ -44,6 +44,8 @@
       const wd = (i) => (i === 6 ? 1 : i + 2); // Pzt=0 → Capacitor: Paz=1, Pzt=2 … Cmt=7
       const at = (hhmm) => { const m = toMin(hhmm); return { hour: Math.floor(m / 60), minute: m % 60 }; };
       const extra = { smallIcon: 'ic_stat_hedef', iconColor: '#0f5c4d' };
+      const alarmExtra = { ...extra, channelId: 'hedef-alarm', autoCancel: true };
+      try { await LN.createChannel({ id: 'hedef-alarm', name: 'Sayaç ve mola alarmı', description: 'Çalışma süresi ve mola bitince çalan alarm', importance: 5, visibility: 1, sound: 'alarm_chime.wav', vibration: true }); } catch (e) { /* eski Android */ }
       if (R.enabled) {
         for (let i = 0; i < 7; i++) {
           const bl = S.plan.blocks.filter((b) => b.dow === i).sort((a, b) => toMin(a.start) - toMin(b.start));
@@ -60,9 +62,23 @@
           if (when > new Date()) list.push({ id: id++, ...extra, title: `Yarın: ${k.short}`, body: k.t, schedule: { at: when, allowWhileIdle: true } });
         }
       }
-      if (S.timer && S.timer.running && !S.timer.alerted) {
+      const H = plugin('Hedef'); const useAlarm = !!(H && H.scheduleAlarm);
+      if (useAlarm) { H.cancelAlarm({ id: 1 }).catch(() => {}); H.cancelAlarm({ id: 3 }).catch(() => {}); }
+      if (useAlarm && S.timer && S.timer.running && !S.timer.alerted) {
+        const end = S.timer.startedAt + S.timer.target * 60000 - S.timer.acc;
+        if (end > Date.now()) H.scheduleAlarm({ id: 1, at: end, kind: 'timeup', title: `⏰ ${S.timer.target} dakika doldu — mola zamanı!`, body: `${subjName(S.timer.subjectId)} bitti, harika çalıştın! Kaydet ve ${S.profile.brk || 10} dk mola ver.` }).catch(() => {});
+      }
+      if (useAlarm && S.brk && S.brk.endsAt > Date.now()) {
+        const nb = nextBlockToday();
+        H.scheduleAlarm({ id: 3, at: S.brk.endsAt, kind: 'breakend', title: '☕ Mola bitti!', body: nb ? `Sıradaki: ${nb.start} ${subjName(nb.subjectId)}. Hadi sayacı başlat 🐴` : 'Hadi, bir blok daha! Sayacı başlat 🐴' }).catch(() => {});
+      }
+      if (!useAlarm && S.timer && S.timer.running && !S.timer.alerted) {
         const end = new Date(S.timer.startedAt + S.timer.target * 60000 - S.timer.acc);
-        if (end > new Date()) list.push({ id: 1, ...extra, title: 'Blok tamamlandı ⏰', body: `${subjName(S.timer.subjectId)}: ${S.timer.target} dakika doldu. Kaydet ve mola ver.`, schedule: { at: end, allowWhileIdle: true } });
+        if (end > new Date()) list.push({ id: 1, ...alarmExtra, title: `⏰ ${S.timer.target} dakika doldu — mola zamanı!`, body: `${subjName(S.timer.subjectId)} bitti, harika çalıştın! Uygulamayı açıp kaydet ve ${S.profile.brk || 10} dk mola ver.`, schedule: { at: end, allowWhileIdle: true } });
+      }
+      if (!useAlarm && S.brk && S.brk.endsAt > Date.now()) {
+        const nb = nextBlockToday();
+        list.push({ id: 3, ...alarmExtra, title: '☕ Mola bitti!', body: nb ? `Sıradaki: ${nb.start} ${subjName(nb.subjectId)}. Hadi sayacı başlat 🐴` : 'Hadi, bir blok daha! Sayacı başlat 🐴', schedule: { at: new Date(S.brk.endsAt), allowWhileIdle: true } });
       }
       if (list.length) await LN.schedule({ notifications: list });
       return 'ok';
@@ -158,6 +174,7 @@
       if (r && r.tab) {
         location.hash = '#' + r.tab;
         if (r.reason && r.reason.startsWith('strict')) setTimeout(() => showStrictAngry(r.reason, r.message), 350);
+        else if (r.reason === 'timeup' || r.reason === 'breakend') setTimeout(() => { render(); checkTimers(); }, 300);
         else if (r.message) setTimeout(() => toast(r.message, 6000), 300);
       }
     } catch (e) { /* yok */ }
@@ -968,6 +985,7 @@
     return `
     <div class="two-col">
       <section class="card timer-card">
+        ${S.brk && breakLeft() > 0 ? `<div class="break-banner"><span>☕ Mola</span><b id="break-left">--:--</b><small class="muted">kaldı · bitince alarm çalacak</small><button class="btn sm ghost" data-act="endBreak">Molayı bitir</button></div>` : ''}
         <div class="field-row">
           <label>Ders<select id="t-subject" ${t ? 'disabled' : ''}>${subjectOptions(sid)}</select></label>
           <label>Konu<select id="t-topic" ${t ? 'disabled' : ''}>${topicOptions(sid, t?.topicId)}</select></label>
@@ -1005,17 +1023,102 @@
     const now = new Date(); const nowM = now.getHours() * 60 + now.getMinutes();
     return blocksFor(now).find((b) => !isDone(now, b) && toMin(b.start) + b.minutes > nowM) || null;
   }
+  // ------------------------------------------------- alarm ve mola ⏰☕
+  let alarmLoop = null; let alarmStopT = null;
+  function alarmTone() {
+    // alarm, ses efektleri kapalı olsa da çalar
+    let a = null; try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); a = actx; } catch (e) { a = null; }
+    if (!a) { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); return; }
+    try {
+      const t0 = a.currentTime + 0.02;
+      [[880, 0], [1175, 0.2], [1568, 0.4], [1175, 0.75], [1568, 0.95]].forEach(([f, d]) => {
+        const o = a.createOscillator(); o.type = 'triangle'; const g = a.createGain(); const t = t0 + d;
+        o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+        o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.4);
+      });
+    } catch (e) { /* ses yok */ }
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+  }
+  /** Alarmı başlatır: kapatılana kadar (en fazla 45 sn) tekrar eder. */
+  function startAlarm() {
+    stopAlarm(); alarmTone(); alarmLoop = setInterval(alarmTone, 1800);
+    alarmStopT = setTimeout(stopAlarm, 45000);
+  }
+  function stopAlarm() { clearInterval(alarmLoop); clearTimeout(alarmStopT); alarmLoop = null; }
+  function cancelNativeAlarm(id) {
+    const LN = plugin('LocalNotifications'); if (LN) LN.cancel({ notifications: [{ id }] }).catch(() => {});
+    const H = plugin('Hedef'); if (H && H.cancelAlarm) H.cancelAlarm({ id }).catch(() => {});
+  }
+
+  /** Çalışma süresi doldu: alarm + mola penceresi. */
+  function timeUp() {
+    const t = S.timer; if (!t) return;
+    t.alerted = true; save();
+    if ($('#modal').open) return; // başka bir pencere açıksa yalnızca alarm
+    startAlarm(); cancelNativeAlarm(1);
+    const M = window.Mascot; const brk = Number(S.profile.brk) || 10;
+    if (document.hidden) notify(`⏰ ${t.target} dakika doldu`, `Mola zamanı! ${brk} dk dinlen.`, 'timer');
+    openModal(`
+      <div class="summary win timeup">
+        <p class="eyebrow">${esc(subjName(t.subjectId))} · ${t.target} dk</p>
+        <div class="horse-anim">${M ? M.svg('happy', 210, 'timeup', mascotLook()) : ''}</div>
+        <h3>⏰ ${t.target} dakika doldu!</h3>
+        <p class="sum-quote">Harika çalıştın. Şimdi ${brk} dakika mola: kalk, su iç, gözlerini dinlendir. Mola bitince haber vereceğim.</p>
+        <div class="btn-row end"><button class="btn ghost" value="more" formnovalidate>5 dk daha çalış</button><button class="btn" value="ok">Kaydet ve molaya başla</button></div>
+      </div>`, (v) => {
+      stopAlarm();
+      if (v === 'more') { t.target += 5; t.alerted = false; save(); render(); toast('5 dakika eklendi, devam! 💪'); return; }
+      finishTimer(true);
+    }, null, () => stopAlarm());
+  }
+  /** Sayacı kaydetme penceresi; molaVer true ise kayıttan sonra mola başlar. */
+  function finishTimer(molaVer) {
+    const t = S.timer; if (!t) return; const mins = Math.max(1, Math.round(timerElapsed() / 60000));
+    openModal(sessionForm({ subjectId: t.subjectId, topicId: t.topicId, minutes: mins, date: t.date }), (v, f) => {
+      saveSession(f, t.blockId ? { blockId: t.blockId } : {}); S.timer = null;
+      if (molaVer) startBreak(); else save();
+      render();
+    });
+  }
+  function startBreak() {
+    const m = Number(S.profile.brk) || 10;
+    S.brk = { endsAt: Date.now() + m * 60000, minutes: m }; save();
+    toast(`☕ ${m} dakikalık mola başladı. Bitince alarm çalacak.`, 4000);
+    location.hash = '#study';
+  }
+  function breakLeft() { return S.brk ? S.brk.endsAt - Date.now() : 0; }
+  function breakOver() {
+    S.brk = null; save(); cancelNativeAlarm(3);
+    if ($('#modal').open) { alarmTone(); return; }
+    startAlarm();
+    const nb = nextBlockToday(); const M = window.Mascot;
+    openModal(`
+      <div class="summary win timeup">
+        <p class="eyebrow">Mola bitti</p>
+        <div class="horse-anim">${M ? M.svg('ok', 210, 'brkend', mascotLook()) : ''}</div>
+        <h3>☕ Mola bitti, hazır mısın?</h3>
+        <p class="sum-quote">${nb ? `Sıradaki blok: ${nb.start} ${esc(subjName(nb.subjectId))} (${nb.minutes} dk).` : 'Bir blok daha yapalım mı?'}</p>
+        <div class="btn-row end"><button class="btn ghost" value="later" formnovalidate>Biraz sonra</button><button class="btn" value="ok">▶ Sayacı başlat</button></div>
+      </div>`, (v) => {
+      stopAlarm();
+      if (v !== 'ok') return;
+      const sid = nb ? nb.subjectId : (studySubject || 'egitim');
+      startTimer(sid, '', nb ? nb.minutes : Number(S.profile.block) || 50, nb ? nb.id : null);
+      location.hash = '#study'; render();
+    }, null, () => stopAlarm());
+  }
+  function checkTimers() {
+    if (S.timer && S.timer.running && !S.timer.alerted && timerElapsed() >= S.timer.target * 60000) timeUp();
+    if (S.brk && breakLeft() <= 0) breakOver();
+    const bl = $('#break-left'); if (bl && S.brk) { const sec = Math.max(0, Math.ceil(breakLeft() / 1000)); bl.textContent = `${pad(Math.floor(sec / 60))}:${pad(sec % 60)}`; }
+  }
+
   function tickTimer() {
     const el = $('#clock-time'); if (!el) return;
     const ms = timerElapsed(); const s = Math.floor(ms / 1000);
     el.textContent = `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
     const target = (S.timer?.target || Number($('#t-target')?.value) || 50) * 60000;
     const arc = $('#clock-arc'); if (arc) { arc.style.strokeDasharray = `${clamp(ms / target * 100, 0, 100)} 100`; arc.style.opacity = ms > 1000 ? 1 : 0; }
-    if (S.timer && S.timer.running && !S.timer.alerted && ms >= target) {
-      S.timer.alerted = true; save();
-      notify('Blok tamamlandı ⏰', `${subjName(S.timer.subjectId)}: ${S.timer.target} dakika doldu. Kaydet ve ${S.profile.brk} dk mola ver.`, 'timer');
-      beep();
-    }
   }
   function renderTimerChip() {
     const c = $('#timer-chip');
@@ -1023,6 +1126,16 @@
     c.classList.remove('hidden');
     const s = Math.floor(timerElapsed() / 1000);
     c.textContent = `${S.timer.running ? '⏱' : '❚❚'} ${pad(Math.floor(s / 60))}:${pad(s % 60)} ${subj(S.timer.subjectId)?.short || ''}`;
+  }
+  /** Android 12+: alarmın tam zamanında çalması için "Alarmlar ve hatırlatıcılar" izni. */
+  async function ensureExactAlarms(force = false) {
+    const LN = plugin('LocalNotifications'); if (!LN || !LN.checkExactNotificationSetting) return;
+    try {
+      const st = await LN.checkExactNotificationSetting();
+      if (st && st.exact_alarm === 'granted') return;
+      S.awards = S.awards || {}; if (S.awards.exactAsked && !force) return; S.awards.exactAsked = 1; save();
+      if (await ask('Alarmın tam zamanında çalması için Android’in “Alarmlar ve hatırlatıcılar” iznini açman gerekiyor. Açılacak ekranda Hedef AGS’ye izin ver.', 'İzni aç')) await LN.changeExactNotificationSetting();
+    } catch (e) { /* desteklenmiyor */ }
   }
   function startTimer(subjectId, topicId, target, blockId) {
     S.timer = { subjectId, topicId: topicId || '', target: Number(target) || 50, blockId: blockId || null, running: true, startedAt: Date.now(), acc: 0, date: dkey() };
@@ -1365,6 +1478,7 @@
       <label>Akşam kontrolü<input type="time" name="evening" value="${R.evening}"></label></div>
       <label class="switch"><input type="checkbox" name="blocks" ${R.blocks ? 'checked' : ''}> Her blok başlarken haber ver</label>
       <label class="switch"><input type="checkbox" name="sfx" ${S.profile.sfx !== false ? 'checked' : ''}> Ses efektleri (kişneme, tükürme…)</label>
+      ${isNative ? '<div class="perm-row"><span>Alarmlar ve hatırlatıcılar <small class="muted">(sayaç ve mola alarmı tam zamanında çalsın)</small></span><span></span><button type="button" class="btn sm" data-act="exactAlarm">İzni aç</button></div>' : ''}
       <div class="btn-row end"><button type="button" class="btn ghost" data-act="testNotif">Test bildirimi</button><button class="btn">Kaydet</button></div>
       ${isNative ? `<div class="note">Bildirimler telefonunun kendi alarm sistemiyle kurulur: uygulama kapalıyken de gelir. Gelmezse telefon Ayarları → Uygulamalar → Hedef AGS → Bildirimler’i aç ve pil tasarrufu kısıtlamasını kaldır.</div>` : `<div class="note">
         <b>Önemli:</b> Tarayıcı bildirimleri uygulama açıkken ya da arka planda çalışırken gelir. Telefonun kapalıyken bile
@@ -1659,16 +1773,16 @@
       S.plan.blocks.push(b); save(); render(); A.editBlock({ dataset: { id: b.id } });
     },
     ics: icsExport,
-    tStart() { const sid = $('#t-subject').value; startTimer(sid, $('#t-topic').value, $('#t-target').value, nextBlockToday()?.subjectId === sid ? nextBlockToday().id : null); render(); },
+    tStart() {
+      const sid = $('#t-subject').value; S.brk = null; cancelNativeAlarm(3);
+      startTimer(sid, $('#t-topic').value, $('#t-target').value, nextBlockToday()?.subjectId === sid ? nextBlockToday().id : null); render();
+      ensureExactAlarms();
+    },
     tPause() { const t = S.timer; t.acc += Date.now() - t.startedAt; t.running = false; save(); render(); },
     tResume() { const t = S.timer; t.startedAt = Date.now(); t.running = true; save(); render(); },
     async tCancel() { if (await ask('Sayaç kaydedilmeden silinsin mi?', 'Sil')) { S.timer = null; save(); render(); } },
-    tFinish() {
-      const t = S.timer; const mins = Math.max(1, Math.round(timerElapsed() / 60000));
-      openModal(sessionForm({ subjectId: t.subjectId, topicId: t.topicId, minutes: mins, date: t.date }), (v, f) => {
-        saveSession(f, t.blockId ? { blockId: t.blockId } : {}); S.timer = null; save(); render();
-      });
-    },
+    tFinish() { finishTimer(!!(S.timer && S.timer.alerted)); },
+    endBreak() { S.brk = null; save(); cancelNativeAlarm(3); render(); toast('Mola bitti, hadi başlayalım! 🐴'); },
     addSession() { openModal(sessionForm({ subjectId: studySubject || 'egitim' }), (v, f) => { saveSession(f); render(); }); },
     async delSession(el) { if (!(await ask('Bu çalışma kaydı silinsin mi?', 'Sil'))) return; S.sessions = S.sessions.filter((s) => s.id !== el.dataset.id); save(); render(); },
     openSubj(el) { openSubj = openSubj === el.dataset.id ? null : el.dataset.id; render(); },
@@ -1721,6 +1835,7 @@
     async phoneCalendarRemove() { const H = plugin('Hedef'); try { await H.removeCalendarEvents(); toast('Hedef AGS etkinlikleri takvimden kaldırıldı'); } catch (e) { /* yok */ } },
     async permUsage() { try { await plugin('Hedef').openUsageSettings(); toast('Listede Hedef AGS’yi bul ve izin ver, sonra geri dön.', 5000); } catch (e) { /* yok */ } },
     async permOverlay() { try { await plugin('Hedef').openOverlaySettings(); } catch (e) { /* yok */ } },
+    exactAlarm() { ensureExactAlarms(true); },
     async permMedia() { try { await plugin('Hedef').openMediaSettings(); toast('Listede Hedef AGS’yi bul ve izin ver, sonra geri dön.', 5000); } catch (e) { /* yok */ } },
     addChannel(el) {
       const ch = el.dataset.ch; if (!ch) return; S.guard.media = S.guard.media || { enabled: true, channels: [] };
@@ -1806,7 +1921,7 @@
   }
 
   window.addEventListener('hashchange', () => { const h = location.hash.slice(1); current = VIEWS.find((v) => v.id === h) || h === 'more' ? h : 'today'; render(); window.scrollTo(0, 0); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { if (localStorage.getItem(KEY)) S = load(); } catch (e) { /* yok */ } render(); checkReminders(); if (isNative) { nativeSync(); takeLaunchTab(); } } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { if (localStorage.getItem(KEY)) S = load(); } catch (e) { /* yok */ } render(); checkReminders(); checkTimers(); if (isNative) { nativeSync(); takeLaunchTab(); } } });
 
   // ------------------------------------------------------------------- boot
   if (!isNative && 'serviceWorker' in navigator && location.protocol !== 'file:') {
@@ -1821,13 +1936,12 @@
   setTimeout(() => { const k = pendingSummary(); if (k && k !== dkey() && !$('#modal').open) showDaySummary(k); }, 2200);
   render();
   if (!S.profile.onboarded) onboarding();
-  setInterval(() => { renderTimerChip(); if (current === 'study') tickTimer(); else if (S.timer && S.timer.running && !S.timer.alerted && timerElapsed() >= S.timer.target * 60000) tickTimerBackground(); }, 1000);
-  function tickTimerBackground() { S.timer.alerted = true; save(); notify('Blok tamamlandı ⏰', `${subjName(S.timer.subjectId)}: ${S.timer.target} dakika doldu.`, 'timer'); beep(); }
+  setInterval(() => { renderTimerChip(); if (current === 'study') tickTimer(); checkTimers(); }, 1000);
   setInterval(checkReminders, 30000); checkReminders();
   // gün değişince yeniden çiz
   let lastDay = dkey(); setInterval(() => { if (dkey() !== lastDay) { lastDay = dkey(); render(); } }, 60000);
 
   initCloud();
   if (isNative) { scheduleNative(false); nativeSync(); takeLaunchTab(); setTimeout(() => renderWidgetMascots(), 1500); }
-  window.__hedef = { showStrictAngry, get state() { return S; }, generatePlan, coachMessages };
+  window.__hedef = { showStrictAngry, timeUp, breakOver, get state() { return S; }, generatePlan, coachMessages };
 })();

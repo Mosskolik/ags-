@@ -51,6 +51,24 @@ public class HedefPlugin extends Plugin {
         call.resolve();
     }
 
+    /** Sayaç / mola bitişine çalar saat alarmı kurar (uygulama kapalıyken de açar). */
+    @PluginMethod
+    public void scheduleAlarm(PluginCall call) {
+        int id = call.getInt("id", 1);
+        Long at = call.getLong("at");
+        if (at == null || at <= System.currentTimeMillis()) { call.reject("geçersiz zaman"); return; }
+        TimerAlarmReceiver.schedule(ctx(), id, at, call.getString("kind", "timeup"), call.getString("title", "⏰ Süre doldu"), call.getString("body", ""));
+        JSObject r = new JSObject();
+        r.put("exact", TimerAlarmReceiver.canExact(ctx()));
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void cancelAlarm(PluginCall call) {
+        TimerAlarmReceiver.cancel(ctx(), call.getInt("id", 1));
+        call.resolve();
+    }
+
     /** Giydirilmiş maskot görselini (PNG, base64) widget için kaydeder. */
     @PluginMethod
     public void saveMascot(PluginCall call) {
