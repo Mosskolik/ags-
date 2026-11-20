@@ -76,12 +76,52 @@
     ['com.netflix.mediaclient', 'Netflix'], ['com.snapchat.android', 'Snapchat'],
     ['com.reddit.frontpage', 'Reddit'], ['tv.twitch.android.app', 'Twitch']
   ];
-  const DEFAULT_LESSON_KEYWORDS = ['ags', 'öabt', 'kpss', 'meb', 'eğitim bilimleri', 'eğitimin temelleri', 'gelişim psikolojisi', 'öğrenme psikolojisi',
+  // Ders videosu başlıklarında geçebilecek kelimeler. Ders dışı videoları yanlışlıkla
+  // yakalamasın diye çok genel kelimeler (kamp, sünnet, problem, tarih…) tek başına kullanılmadı.
+  const DEFAULT_LESSON_KEYWORDS = [
+    // genel sınav ve ders ifadeleri
+    'ags', 'öabt', 'kpss', 'meb ags', 'akademi giriş', 'konu anlatımı', 'konu anlatım', 'ders anlatımı', 'soru çözümü', 'soru çözüm',
+    'deneme sınavı', 'deneme çözümü', 'çıkmış sorular', 'çıkmış soru', 'tekrar kampı', 'soru kampı', 'genel tekrar', 'full tekrar', 'hızlı tekrar',
+    'ders notu', 'canlı ders', 'öğretmen adayı', 'öğretmenlik', 'akılda kalıcı', 'soru taktikleri', 'çözüm taktikleri', 'soru tipleri',
+    // eğitim bilimleri ve Türk millî eğitim sistemi
+    'eğitim bilimleri', 'eğitimin temelleri', 'eğitim psikolojisi', 'gelişim psikolojisi', 'öğrenme psikolojisi', 'öğrenme kuramları',
+    'davranışçı kuram', 'bilişsel kuram', 'yapılandırmacı', 'piaget', 'vygotsky', 'erikson', 'kohlberg', 'bandura', 'maslow', 'bronfenbrenner',
+    'bloom taksonomisi', 'ölçme ve değerlendirme', 'ölçme değerlendirme', 'güvenirlik', 'geçerlik', 'program geliştirme', 'öğretim ilke',
+    'öğretim yöntem', 'öğretim strateji', 'öğretim teknolojileri', 'materyal tasarımı', 'rehberlik', 'psikolojik danışma', 'özel eğitim',
+    'kaynaştırma', 'sınıf yönetimi', 'eğitim felsefesi', 'eğitim sosyolojisi', 'türk eğitim tarihi', 'eğitim tarihi', 'milli eğitim', 'millî eğitim',
+    // mevzuat
+    'mevzuat', 'anayasa', 'temel haklar', '657', 'devlet memurları kanunu', '1739', 'milli eğitim temel kanunu', '222 sayılı', '7528',
+    'öğretmenlik meslek kanunu', 'yönetmelik', 'ortaöğretim kurumları', 'okul öncesi eğitim ve ilköğretim', 'çocuk hakları', 'insan hakları',
+    // sözel yetenek
+    'sözel yetenek', 'sözel mantık', 'sözcükte anlam', 'cümlede anlam', 'paragrafta anlam', 'paragraf soruları', 'paragraf çözüm',
+    'anlatım bozukluğu', 'yazım kuralları', 'noktalama işaretleri', 'dil bilgisi', 'dilbilgisi', 'türkçe dersi',
+    // sayısal yetenek
+    'sayısal yetenek', 'sayısal mantık', 'matematik', 'yaş problemleri', 'işçi problemleri', 'hız problemleri', 'yüzde problemleri',
+    'sayı problemleri', 'kesir problemleri', 'karışım problemleri', 'kar zarar', 'oran orantı', 'ebob', 'ekok', 'bölünebilme', 'rasyonel sayılar',
+    'üslü sayılar', 'köklü sayılar', 'permütasyon', 'kombinasyon', 'olasılık', 'kümeler', 'fonksiyonlar', 'geometri', 'grafik yorumlama', 'tablo yorumlama',
+    // tarih
+    'tarih dersi', 'tarih konu', 'islamiyet öncesi türk', 'türk islam devletleri', 'ilk türk devletleri', 'osmanlı tarihi', 'osmanlı devleti',
+    'selçuklu tarihi', 'kuruluş dönemi', 'yükselme dönemi', 'kurtuluş savaşı', 'milli mücadele', 'inkılap tarihi', 'atatürk ilkeleri',
+    'atatürk ilke ve inkılapları', 'çağdaş türk ve dünya tarihi', 'xx. yüzyıl başlarında',
+    // coğrafya
+    'türkiye coğrafyası', 'coğrafya', 'iklim ve bitki örtüsü', 'yer şekilleri', 'nüfus ve yerleşme', 'coğrafi bölgeler', 'coğrafi konum',
+    // ÖABT din kültürü ve ilahiyat
+    'din kültürü', 'dkab', 'ahlak bilgisi', 'ilahiyat', 'kuran-ı kerim', 'kur’an', "kur'an", 'kuran ilimleri', 'ulumul kuran', 'tecvit', 'tecvid',
+    'tefsir', 'kuran meali', 'meali', 'hadis', 'hadis usulü', 'fıkıh', 'fıkıh usulü', 'usul-i fıkıh', 'kelam', 'akaid', 'akait', 'mezhepler tarihi', 'islam mezhepleri',
+    'siyer', 'siyer-i nebi', 'islam tarihi', 'islam medeniyeti', 'tasavvuf', 'islam felsefesi', 'din felsefesi', 'dinler tarihi', 'din psikolojisi',
+    'din sosyolojisi', 'din eğitimi', 'din öğretimi', 'değerler eğitimi', 'islam ahlakı', 'ahlak felsefesi', 'dkab öğretim programı',
+    // yüksek lisans ve tez
+    'tez yazımı', 'tez yazma', 'tez danışmanı', 'tez önerisi', 'akademik yazım', 'akademik yazma', 'araştırma yöntemleri', 'bilimsel araştırma',
+    'nitel araştırma', 'nicel araştırma', 'karma yöntem', 'literatür taraması', 'kaynak gösterme', 'apa', 'spss', 'veri analizi', 'makale yazımı',
+    'yüksek lisans', 'lisansüstü'
+  ];
+  const OLD_DEFAULT_KEYWORDS_V1 = ['ags', 'öabt', 'kpss', 'meb', 'eğitim bilimleri', 'eğitimin temelleri', 'gelişim psikolojisi', 'öğrenme psikolojisi',
     'ölçme ve değerlendirme', 'ölçme değerlendirme', 'program geliştirme', 'öğretim ilke', 'öğretim yöntem', 'rehberlik', 'sınıf yönetimi', 'özel eğitim',
     'mevzuat', 'anayasa', 'milli eğitim', 'öğretmenlik meslek', '657', '1739', 'sözel mantık', 'paragraf', 'sözcükte anlam', 'problem', 'sayısal mantık',
     'inkılap', 'osmanlı', 'türk tarihi', 'coğrafya', 'din kültürü', 'dkab', 'tefsir', 'hadis', 'fıkıh', 'kelam', 'siyer', 'islam tarihi', 'tasavvuf',
     'dinler tarihi', 'din psikolojisi', 'din sosyolojisi', 'din eğitimi', 'din felsefesi', 'mezhepler', 'tecvit', 'konu anlatımı', 'soru çözümü', 'deneme çözümü',
     'tez yazımı', 'akademik yazım', 'araştırma yöntemleri', 'literatür'];
+  const sameList = (a, b) => Array.isArray(a) && a.length === b.length && a.every((x, i) => x === b[i]);
   const lessonKeywords = () => (S.guard.media && Array.isArray(S.guard.media.keywords) ? S.guard.media.keywords : DEFAULT_LESSON_KEYWORDS);
   let syncT = null;
   function nativeSyncSoon() { if (!isNative) return; clearTimeout(syncT); syncT = setTimeout(nativeSync, 800); }
@@ -231,6 +271,7 @@
     // eski tahmini tarihi ÖSYM'nin açıkladığı resmi tarihle değiştir
     m.dayRatings = { ...(s.dayRatings || {}) };
     if (!m.firstDay) m.firstDay = (s.sessions || []).reduce((a, x) => (!a || x.date < a ? x.date : a), null) || null;
+    if (m.guard && m.guard.media && Array.isArray(m.guard.media.keywords) && typeof OLD_DEFAULT_KEYWORDS_V1 !== 'undefined' && sameList(m.guard.media.keywords, OLD_DEFAULT_KEYWORDS_V1)) m.guard.media.keywords = null;
     if (m.profile.agsDate === OLD_DEFAULT_DATE) { m.profile.agsDate = '2027-05-08'; m.profile.oabtDate = '2027-05-09'; migrated = true; }
     return m;
   }
@@ -1705,7 +1746,7 @@
       g.media.enabled = !!f.mediaEnabled;
       g.media.channels = String(f.channels || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 60);
       const kw = String(f.keywords || '').split(/[,\n]/).map((x) => x.trim()).filter(Boolean).slice(0, 150);
-      g.media.keywords = kw.length ? kw : null;
+      g.media.keywords = kw.length && !sameList(kw, DEFAULT_LESSON_KEYWORDS) ? kw : null;
       if (g.media.enabled) nativeStatus().then((st) => { if (st && !st.media) toast('Ders videosu kontrolü için “Bildirim erişimi” iznini ver.', 5000); });
       g.apps = GUARD_APPS.map(([pkg]) => pkg).filter((pkg) => f['app:' + pkg]);
       toast(g.enabled ? (g.strict ? 'Odak bekçisi sıkı modda açık 🔒' : 'Odak bekçisi açık') : 'Odak bekçisi kapalı');
