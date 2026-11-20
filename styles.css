@@ -280,3 +280,15 @@ dialog form { padding: 20px; } dialog h3 { margin-bottom: 12px; font-size: 1.2re
 }
 .dist-row { grid-template-columns: 12px minmax(90px, 220px) 1fr 84px; }
 .dist-v { white-space: nowrap; }
+
+/* önemli tarihler */
+.keydates { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.keydates li { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
+.keydates .kd-date { font-size: .78rem; color: var(--muted); }
+.keydates .kd-t { font-weight: 600; font-size: .9rem; }
+.keydates .kd-left { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); }
+.keydates .kd-sinav { border-color: var(--accent); }
+.keydates li.next { background: var(--accent-2); border-color: var(--accent); }
+.keydates li.past { opacity: .5; }
+@media (max-width: 760px) { .keydates { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .keydates { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

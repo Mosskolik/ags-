@@ -31,7 +31,8 @@
       v: 1,
       profile: {
         name: '', onboarded: false,
-        agsDate: '2027-07-25',
+        agsDate: '2027-05-08',
+        oabtDate: '2027-05-09',
         hours: [3, 3, 3, 3, 3, 4, 4], // gün başına saat (Pzt..Paz)
         startTime: '18:00',
         weekendStart: '10:00',
@@ -52,9 +53,28 @@
     };
   }
 
+  // ÖSYM 2027 takvimi (28 Ekim 2026'da açıklandı)
+  const KEY_DATES = [
+    { d: '2027-03-19', t: 'AGS başvuruları başlıyor', short: 'Başvuru başlar', kind: 'basvuru' },
+    { d: '2027-03-29', t: 'Normal başvurunun son günü', short: 'Son başvuru', kind: 'basvuru' },
+    { d: '2027-04-06', t: 'Geç başvuru günü', short: 'Geç başvuru', kind: 'basvuru' },
+    { d: '2027-05-08', t: 'MEB-AGS sınavı (Cumartesi 10.15)', short: 'AGS', kind: 'sinav', ags: true },
+    { d: '2027-05-09', t: 'ÖABT — Din Kültürü ve Ahlak Bilgisi (Pazar)', short: 'ÖABT', kind: 'sinav', oabt: true },
+    { d: '2027-06-11', t: 'AGS ve ÖABT sonuçları', short: 'Sonuç', kind: 'sonuc' }
+  ];
+  const OLD_DEFAULT_DATE = '2027-07-25';
+  let migrated = false;
   function mergeDefaults(s) {
     const d = defaultState();
-    return { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan } };
+    const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan } };
+    // eski tahmini tarihi ÖSYM'nin açıkladığı resmi tarihle değiştir
+    if (m.profile.agsDate === OLD_DEFAULT_DATE) { m.profile.agsDate = '2027-05-08'; m.profile.oabtDate = '2027-05-09'; migrated = true; }
+    return m;
+  }
+  function keyDates() {
+    // kullanıcı sınav tarihini değiştirdiyse sınav satırları onu izler
+    return KEY_DATES.map((k) => (k.ags ? { ...k, d: S.profile.agsDate } : k.oabt ? { ...k, d: S.profile.oabtDate || k.d } : k))
+      .map((k) => ({ ...k, left: daysBetween(new Date(), parseD(k.d)) }));
   }
   function load() {
     try {
@@ -94,6 +114,7 @@
           const remote = JSON.parse(d.json);
           try { localStorage.setItem(KEY, d.json); } catch (e) { /* yok */ }
           S = mergeDefaults(remote);
+          if (migrated) { migrated = false; save(); toast('Sınav tarihi ÖSYM takvimine göre güncellendi: AGS 8 Mayıs 2027'); }
           if (S.profile.onboarded && modalIsOnboarding && $('#modal').open) { modalHandler = null; modalCancel = null; modalIsOnboarding = false; $('#modal').close(); }
           render(); toast('Verilerin hesabından yüklendi ☁');
           setSync('ok'); return;
@@ -268,7 +289,9 @@
     const hour = today.getHours();
     const name = S.profile.name ? `${S.profile.name}, ` : '';
 
-    if (dl >= 0) msgs.push({ t: 'info', h: `${dl} gün kaldı · ${ph.name} dönemi`, p: ph.desc });
+    if (dl >= 0) msgs.push({ t: 'info', h: `AGS’ye ${dl} gün kaldı · ${ph.name} dönemi`, p: ph.desc });
+    const nextApp = keyDates().find((k) => k.kind === 'basvuru' && k.left >= 0);
+    if (nextApp && nextApp.left <= 21) msgs.push({ t: 'warn', h: nextApp.left === 0 ? `Bugün: ${nextApp.t}` : `${nextApp.left} gün sonra: ${nextApp.t}`, p: 'ÖSYM başvurusunu (ais.osym.gov.tr) son güne bırakma; ücreti yatırıp başvurunu onaylatmayı unutma.' });
 
     if (S.sessions.length === 0) {
       msgs.push({ t: 'go', h: 'İlk adım', p: `${name}bugünkü programındaki ilk bloğa başla. “Çalış” sekmesinden sayacı açman yeterli; bitince süre kendiliğinden kaydedilir.` });
@@ -374,7 +397,8 @@
       return `<a href="#${id}" class="${id === current ? 'active' : ''}"><span class="ico">${v.icon}</span>${v.title}</a>`;
     }).join('');
     const dl = daysLeft();
-    $('#countdown-mini').innerHTML = dl >= 0 ? `<b>${dl}</b> gün<br><small>AGS: ${fmtDate(parseD(S.profile.agsDate))} ${parseD(S.profile.agsDate).getFullYear()}</small>` : '';
+    const od = S.profile.oabtDate ? daysBetween(new Date(), parseD(S.profile.oabtDate)) : null;
+    $('#countdown-mini').innerHTML = dl >= 0 ? `<b>${dl}</b> gün<br><small>AGS: ${fmtDate(parseD(S.profile.agsDate))} ${parseD(S.profile.agsDate).getFullYear()}${od !== null && od >= 0 ? `<br>ÖABT: ${fmtDate(parseD(S.profile.oabtDate))} · ${od} gün` : ''}</small>` : '';
     const st = streak();
     $('#streak-chip').textContent = st ? `🔥 ${st} gün` : `⏳ ${Math.max(dl, 0)} gün`;
   }
@@ -407,6 +431,14 @@
     </li>`;
   }
 
+  function datesCard() {
+    const ks = keyDates(); const upcoming = ks.filter((k) => k.left >= 0);
+    if (!upcoming.length) return '';
+    return `<section class="card"><div class="card-h"><h3>Önemli tarihler</h3><span class="muted small">ÖSYM 2027 takvimi</span></div>
+      <ol class="keydates">${ks.map((k) => `<li class="kd-${k.kind} ${k.left < 0 ? 'past' : ''} ${k === upcoming[0] ? 'next' : ''}">
+        <span class="kd-date">${fmtDate(parseD(k.d))}</span><span class="kd-t">${esc(k.short)}</span>
+        <span class="kd-left">${k.left < 0 ? 'geçti' : k.left === 0 ? 'bugün' : k.left + ' gün'}</span></li>`).join('')}</ol></section>`;
+  }
   function vToday() {
     const today = new Date(); const dl = daysLeft();
     const tMin = minutesOn(dkey(today)); const tGoal = goalOn(today);
@@ -437,6 +469,7 @@
       <div class="stat card"><small>Bugün blok</small><b>${doneN}</b><span>/ ${blocks.length}</span></div>
     </div>
 
+    ${datesCard()}
     <div class="two-col">
       <section class="card">
         <div class="card-h"><h3>Koçun diyor ki</h3></div>
@@ -886,7 +919,8 @@
       <div class="card-h"><h3>Profil ve hedef</h3></div>
       <div class="field-row"><label>Adın<input name="name" value="${esc(P.name)}"></label>
       <label>AGS tarihi<input type="date" name="agsDate" value="${P.agsDate}" required></label></div>
-      <p class="muted small">Sınav tarihini ÖSYM takviminden kontrol edip güncelle.</p>
+      <label>ÖABT tarihi<input type="date" name="oabtDate" value="${P.oabtDate || ''}"></label>
+      <p class="muted small">ÖSYM 2027 takvimi: AGS 8 Mayıs 2027, ÖABT 9 Mayıs 2027, başvuru 19-29 Mart 2027. Değişiklik olursa buradan güncelle.</p>
       <h4>Günlük çalışma saatlerin</h4>
       <div class="hours">${DAYS_S.map((d, i) => `<label>${d}<input type="number" step="0.5" min="0" max="14" name="h${i}" value="${P.hours[i]}"></label>`).join('')}</div>
       <div class="field-row three">
@@ -1030,6 +1064,11 @@
     const ev = toMin(S.reminders.evening);
     lines.push('BEGIN:VEVENT', 'UID:evening@hedefags', `DTSTAMP:${stamp}`, `DTSTART:${fmt(today, ev)}`, `DTEND:${fmt(today, ev + 10)}`, `RRULE:FREQ=DAILY;UNTIL=${untilS}`,
       'SUMMARY:🌙 Gün sonu: çalışmanı Hedef AGS’ye kaydet', 'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Gün sonu kontrolü', 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT');
+    for (const k of keyDates().filter((x) => x.left >= 0)) {
+      const dd = k.d.replace(/-/g, ''); const nx = dkey(addDays(parseD(k.d), 1)).replace(/-/g, '');
+      lines.push('BEGIN:VEVENT', `UID:kd-${k.kind}-${dd}@hedefags`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${dd}`, `DTEND;VALUE=DATE:${nx}`,
+        `SUMMARY:🎯 ${k.t}`, 'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:Yarın: ${k.t}`, 'TRIGGER:-PT15H', 'END:VALARM', 'END:VEVENT');
+    }
     lines.push('END:VCALENDAR');
     download('hedef-ags-program.ics', lines.join('\r\n'), 'text/calendar');
     toast('Takvim dosyası indirildi — açıp takvimine ekle.');
@@ -1144,7 +1183,7 @@
     const f = Object.fromEntries(new FormData(form).entries());
     const P = S.profile;
     if (form.dataset.form === 'profile') {
-      P.name = f.name.trim(); P.agsDate = f.agsDate; P.hours = [0, 1, 2, 3, 4, 5, 6].map((i) => clamp(Number(f['h' + i]) || 0, 0, 14));
+      P.name = f.name.trim(); P.agsDate = f.agsDate; P.oabtDate = f.oabtDate || P.oabtDate; P.hours = [0, 1, 2, 3, 4, 5, 6].map((i) => clamp(Number(f['h' + i]) || 0, 0, 14));
       P.startTime = f.startTime; P.weekendStart = f.weekendStart; P.ylShare = clamp(Number(f.ylShare) || 0, 0, 80);
       P.block = clamp(Number(f.block) || 50, 20, 120); P.brk = clamp(Number(f.brk) || 0, 0, 30);
       generatePlan(); toast('Kaydedildi, program güncellendi');
@@ -1179,6 +1218,7 @@
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').then((r) => { swReg = r; }).catch(() => {});
   }
+  if (migrated) { migrated = false; save(); setTimeout(() => toast('Sınav tarihi ÖSYM takvimine göre güncellendi: AGS 8 Mayıs 2027', 5000), 400); }
   if (S.profile.onboarded && !S.plan.blocks.length) generatePlan();
   render();
   if (!S.profile.onboarded) onboarding();

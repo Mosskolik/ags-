@@ -35,6 +35,7 @@ aynı zamanda İlahiyat / Din Eğitimi yüksek lisansı yapanlar için hazırlan
 Tüm veriler cihazında (tarayıcıda) tutulur; hesap/sunucu yok. Telefon ↔ bilgisayar arasında
 taşımak için Ayarlar → *Yedeği indir* / *Yedeği yükle*.
 
+> Tarihler ÖSYM 2027 takviminden: AGS 8 Mayıs 2027, ÖABT 9 Mayıs 2027, başvuru 19-29 Mart 2027 (geç başvuru 6 Nisan), sonuç 11 Haziran 2027.
 > Soru dağılımları tahminidir; ÖSYM'nin güncel AGS/ÖABT kılavuzuna göre Ayarlar'dan düzenleyin.
 
 ## Geliştirme
