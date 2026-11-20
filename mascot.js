@@ -6,13 +6,16 @@
 
   // ------------------------------------------------------------ renkler
   const COATS = {
-    kestane: { body: '#B8744A', shade: '#9C5F3A', muzzle: '#EAC7A1' },
-    beyaz: { body: '#F1ECE4', shade: '#D9D1C4', muzzle: '#FBE3D6' },
-    kir: { body: '#9AA3A8', shade: '#7F888D', muzzle: '#D9DDE0' },
-    siyah: { body: '#3A332F', shade: '#2A2420', muzzle: '#6E6158' },
-    altin: { body: '#E2B061', shade: '#C9944A', muzzle: '#F6DDB4' }
+    kestane: { top: '#C8834F', bottom: '#9C5A30', leg: '#8E512B', ear: '#B8744A', earIn: '#F2B8A2', muzzle: '#E9C2A0', muzzle2: '#DDAF8A' },
+    beyaz: { top: '#FFFDF8', bottom: '#E3DBCF', leg: '#D6CCBE', ear: '#F3EEE6', earIn: '#F7C9C2', muzzle: '#FBE3D6', muzzle2: '#F1CFC0' },
+    kir: { top: '#B4BCC1', bottom: '#858E94', leg: '#788188', ear: '#A2AAB0', earIn: '#E7C3BE', muzzle: '#DCE0E3', muzzle2: '#C6CBCF' },
+    siyah: { top: '#4A403A', bottom: '#2A2320', leg: '#241E1B', ear: '#3E3530', earIn: '#B98C80', muzzle: '#76665C', muzzle2: '#5F5249' },
+    altin: { top: '#F2C57A', bottom: '#C99248', leg: '#B98440', ear: '#E2B061', earIn: '#F6C9A8', muzzle: '#F8E2BC', muzzle2: '#EDCF9E' }
   };
-  const MANES = { koyu: '#4A2C1D', sari: '#F4D58D', siyah: '#1E1A18', kizil: '#C2410C', mor: '#7C3AED', mavi: '#2563EB' };
+  const MANES = {
+    koyu: ['#3E2416', '#6B4027', '#8A5A3A'], sari: ['#E9C46A', '#FBE7A8', '#C9A24A'], siyah: ['#141110', '#3A322E', '#5A504A'],
+    kizil: ['#9A3412', '#E0702C', '#C2410C'], mor: ['#5B21B6', '#A78BFA', '#7C3AED'], mavi: ['#1E3A8A', '#60A5FA', '#2563EB']
+  };
   const INK = '#2B211C';
 
   // ------------------------------------------------------------ eşyalar
@@ -57,66 +60,76 @@
   ];
   const CATS = { head: 'Şapkalar', face: 'Gözlükler', neck: 'Boyun', body: 'Eyer örtüleri', mane: 'Yele rengi', coat: 'Tüy rengi', bg: 'Arka plan' };
   const item = (id) => ITEMS.find((x) => x.id === id);
+  const coatOf = (look) => COATS[(item(look.coat) || {}).coat] || COATS.kestane;
+  const maneOf = (look) => MANES[(item(look.mane) || {}).mane] || MANES.koyu;
 
   // ------------------------------------------------------------ çizim
-  const EAR = { happy: -8, ok: 0, worried: 22, sad: 58, sleep: 38 };
+  const EAR = { happy: -6, ok: 0, worried: 20, sad: 46, sleep: 34 };
 
-  function eye(mood) {
-    const x = 157, y = 66;
-    if (mood === 'happy') return `<path d="M${x - 8} ${y + 3} Q${x} ${y - 8} ${x + 8} ${y + 3}" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>`;
-    if (mood === 'sleep') return `<path d="M${x - 8} ${y} Q${x} ${y + 7} ${x + 8} ${y}" fill="none" stroke="${INK}" stroke-width="3.5" stroke-linecap="round"/>`;
-    let s = `<ellipse cx="${x}" cy="${y}" rx="8.5" ry="10" fill="#fff"/><circle cx="${x + 2}" cy="${y + (mood === 'sad' ? 3 : 1)}" r="5.5" fill="${INK}"/><circle cx="${x + 4}" cy="${y - 1}" r="1.8" fill="#fff"/>`;
-    if (mood === 'worried' || mood === 'sad') s += `<path d="M${x - 10} ${y - 11} L${x + 8} ${y - 17}" stroke="${INK}" stroke-width="3.5" stroke-linecap="round"/>`;
-    if (mood === 'sad') s += `<path d="M${x - 9} ${y - 6} Q${x} ${y - 12} ${x + 9} ${y - 6} L${x + 9} ${y - 2} Q${x} ${y - 7} ${x - 9} ${y - 2} Z" fill="var(--coat)"/>`;
-    return s;
+  function eye(mood, g) {
+    if (mood === 'happy') return `<path d="M150 69 Q158 58 166 69" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><path d="M152 63 l-4 -4 M157 60 l-1 -5" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>`;
+    if (mood === 'sleep') return `<path d="M150 67 Q158 75 166 67" fill="none" stroke="${INK}" stroke-width="3.5" stroke-linecap="round"/><path d="M151 70 l-4 3 M156 73 l-2 4" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>`;
+    let e = `<ellipse cx="158" cy="68" rx="8.5" ry="10.5" fill="#fff"/><circle cx="160" cy="${mood === 'sad' ? 72 : 70}" r="6" fill="#3B2412"/><circle cx="162.5" cy="${mood === 'sad' ? 69 : 67}" r="2" fill="#fff"/><path d="M150 61 l-4 -3" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>`;
+    if (mood === 'worried') e += `<path d="M148 55 l19 -6" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
+    if (mood === 'sad') e += `<path d="M149 62 Q158 56 167 61 L167 65 Q158 60 149 66 Z" fill="url(#${g}c)"/><path d="M148 55 l20 -5" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
+    return e;
   }
   function mouth(mood) {
-    if (mood === 'happy') return `<path d="M174 98 Q184 108 194 97" fill="#7A2E2E" stroke="${INK}" stroke-width="2.5" stroke-linecap="round"/>`;
+    if (mood === 'happy') return `<path d="M174 98 Q184 109 194 97" fill="#7A2E2E" stroke="${INK}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M180 102 q4 3 8 0" fill="#E77" />`;
     if (mood === 'sad') return `<path d="M176 103 Q184 96 192 102" fill="none" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
-    if (mood === 'worried') return `<path d="M177 100 Q184 98 191 101" fill="none" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
+    if (mood === 'worried') return `<path d="M177 101 q4 -3 7 0 q4 3 7 0" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>`;
     if (mood === 'sleep') return `<path d="M178 100 h11" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
     return `<path d="M176 99 Q184 105 192 99" fill="none" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
   }
   function extras(mood) {
-    if (mood === 'happy') return `<g fill="#E0B24F"><path d="M30 52l4 9 9 4-9 4-4 9-4-9-9-4 9-4z"/><path d="M196 26l3 6 6 3-6 3-3 6-3-6-6-3 6-3z"/></g>`;
+    if (mood === 'happy') return `<g fill="#E0B24F"><path d="M30 52l4 9 9 4-9 4-4 9-4-9-9-4 9-4z"/><path d="M200 22l3 6 6 3-6 3-3 6-3-6-6-3 6-3z"/></g>`;
     if (mood === 'sleep') return `<g fill="${INK}" font-family="Arial, sans-serif" font-weight="700"><text x="172" y="40" font-size="22">Z</text><text x="190" y="24" font-size="15">z</text><text x="202" y="14" font-size="11">z</text></g>`;
-    if (mood === 'worried') return `<path d="M186 48 q-6 10 0 14 q6-4 0-14z" fill="#7CC4E8"/>`;
-    if (mood === 'sad') return `<path d="M156 80 q-5 9 0 12 q5-3 0-12z" fill="#7CC4E8"/>`;
+    if (mood === 'worried') return `<path d="M188 46 q-6 10 0 14 q6-4 0-14z" fill="#7CC4E8"/>`;
+    if (mood === 'sad') return `<path d="M158 82 q-5 9 0 12 q5 -3 0 -12z" fill="#7CC4E8"/>`;
     return '';
   }
   function place(cat, svg) { const [x, y] = ANCHOR[cat]; return `<g transform="translate(${x} ${y})">${svg}</g>`; }
 
-  /** Maskotun SVG çizimi. mood: happy | ok | worried | sad | sleep; look: giyilen eşyalar */
+  /** Maskotun SVG çizimi. mood: happy | ok | worried | sad | sleep; look: giyilen eşyaların kimlikleri */
   function svg(mood = 'ok', size = 120, uid = '', look = {}) {
-    const coat = COATS[look.coat] || COATS.kestane;
-    const mane = MANES[look.mane] || MANES.koyu;
+    const c = coatOf(look); const m = maneOf(look); const g = 'r' + String(uid).replace(/[^a-zA-Z0-9]/g, '') + mood;
     const ear = EAR[mood] ?? 0;
     const tilt = mood === 'sad' ? 3 : mood === 'happy' ? -3 : 0;
-    const bg = look.bg && item(look.bg) ? item(look.bg).bg.replace(/id="gbg"/g, `id="gbg${uid}"`).replace(/url\(#gbg\)/g, `url(#gbg${uid})`) : '';
-    const wear = (cat) => (look[cat] && item(look[cat]) ? place(cat, item(look[cat]).svg) : '');
-    const earShape = (px, py, d) => `<g transform="rotate(${ear} ${px} ${py})"><path d="${d}" fill="${coat.body}" stroke="${coat.shade}" stroke-width="2" stroke-linejoin="round"/></g>`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 200" width="${size}" height="${Math.round(size * 200 / 220)}" role="img" aria-label="Rüzgar" style="--coat:${coat.body}">
+    const bgItem = look.bg && item(look.bg);
+    const bg = bgItem ? bgItem.bg.replace(/id="gbg"/g, `id="${g}bg"`).replace(/url\(#gbg\)/g, `url(#${g}bg)`) : '';
+    const wear = (cat) => (look[cat] && item(look[cat]) && item(look[cat]).svg ? place(cat, item(look[cat]).svg) : '');
+    const earG = (px, py, d, din) => `<g transform="rotate(${ear} ${px} ${py})"><path d="${d}" fill="${c.ear}" stroke="${c.leg}" stroke-width="2" stroke-linejoin="round"/><path d="${din}" fill="${c.earIn}"/></g>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 200" width="${size}" height="${Math.round(size * 200 / 220)}" role="img" aria-label="Rüzgar">
+  <defs>
+    <linearGradient id="${g}c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.top}"/><stop offset="1" stop-color="${c.bottom}"/></linearGradient>
+    <linearGradient id="${g}m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${m[0]}"/><stop offset="1" stop-color="${m[1]}"/></linearGradient>
+  </defs>
   ${bg}
-  <ellipse cx="104" cy="190" rx="70" ry="7" fill="#000" opacity=".14"/>
+  <ellipse cx="104" cy="191" rx="72" ry="7" fill="#000" opacity=".15"/>
   <g transform="rotate(${tilt} 110 150)">
-    <path d="M44 118 C20 116 10 146 20 174 C26 156 32 144 48 136 Z" fill="${mane}"/>
-    <rect x="58" y="146" width="12" height="40" rx="5" fill="${coat.shade}"/><rect x="74" y="148" width="12" height="38" rx="5" fill="${coat.body}"/>
-    <rect x="112" y="148" width="12" height="38" rx="5" fill="${coat.shade}"/><rect x="128" y="146" width="12" height="40" rx="5" fill="${coat.body}"/>
-    <g fill="${INK}"><rect x="57" y="180" width="14" height="8" rx="3"/><rect x="73" y="180" width="14" height="8" rx="3"/><rect x="111" y="180" width="14" height="8" rx="3"/><rect x="127" y="180" width="14" height="8" rx="3"/></g>
-    <ellipse cx="96" cy="132" rx="54" ry="33" fill="${coat.body}"/>
+    <path d="M46 116 C18 112 8 140 14 160 C18 172 28 180 24 190 C40 182 40 166 34 154 C46 162 52 150 44 140 C54 140 54 128 46 124 Z" fill="url(#${g}m)"/>
+    <path d="M22 150 q8 -16 22 -20" stroke="${m[2]}" stroke-width="2" fill="none"/>
+    <rect x="58" y="146" width="12" height="40" rx="5" fill="${c.leg}"/><rect x="74" y="148" width="12" height="38" rx="5" fill="url(#${g}c)"/>
+    <rect x="112" y="148" width="12" height="38" rx="5" fill="${c.leg}"/><rect x="128" y="146" width="12" height="40" rx="5" fill="url(#${g}c)"/>
+    <g fill="#FFF7EE"><rect x="74" y="168" width="12" height="14" rx="4"/><rect x="128" y="168" width="12" height="14" rx="4"/></g>
+    <g fill="#3A2A22"><rect x="57" y="180" width="14" height="8" rx="3"/><rect x="73" y="180" width="14" height="8" rx="3"/><rect x="111" y="180" width="14" height="8" rx="3"/><rect x="127" y="180" width="14" height="8" rx="3"/></g>
+    <ellipse cx="96" cy="132" rx="54" ry="33" fill="url(#${g}c)"/>
+    <path d="M60 120 q30 -18 70 -6" stroke="#fff" stroke-opacity=".25" stroke-width="5" fill="none" stroke-linecap="round"/>
     ${wear('body')}
-    <path d="M106 122 C112 98 126 80 142 74 L164 96 C150 108 140 124 134 146 Z" fill="${coat.body}"/>
-    ${earShape(142, 48, 'M136 50 L132 22 L150 44 Z')}
-    <path d="M144 44 C124 48 112 68 104 90 C100 100 100 112 106 122 C112 106 118 94 128 82 C134 72 140 62 150 54 Z" fill="${mane}"/>
-    <ellipse cx="154" cy="72" rx="31" ry="27" transform="rotate(14 154 72)" fill="${coat.body}"/>
-    ${earShape(158, 46, 'M152 48 L158 18 L168 46 Z')}
-    <path d="M146 40 q4 -10 12 -6 q-2 6 6 4 q-4 10 -12 12 z" fill="${mane}"/>
-    <path d="M158 48 Q166 62 176 78 L170 82 Q160 66 152 52 Z" fill="#fff" opacity=".9"/>
-    <ellipse cx="180" cy="92" rx="22" ry="16" transform="rotate(10 180 92)" fill="${coat.muzzle}"/>
+    <path d="M106 122 C112 98 126 80 142 74 L164 96 C150 108 140 124 134 146 Z" fill="url(#${g}c)"/>
+    ${earG(142, 48, 'M136 50 L132 22 L150 44 Z', 'M138 44 L136 30 L145 42 Z')}
+    <path d="M146 42 C122 44 110 62 100 86 C96 98 92 112 98 124 C92 108 106 100 104 92 C110 104 116 94 118 86 C122 96 128 86 128 80 C134 86 138 74 138 68 C144 72 148 60 150 54 Z" fill="url(#${g}m)"/>
+    <path d="M104 92 q8 -16 22 -30 M114 88 q6 -12 18 -24" stroke="${m[2]}" stroke-width="2" fill="none"/>
+    <ellipse cx="154" cy="72" rx="31" ry="27" transform="rotate(14 154 72)" fill="url(#${g}c)"/>
+    ${earG(158, 46, 'M152 48 L158 18 L168 46 Z', 'M156 44 L158 28 L164 44 Z')}
+    <path d="M144 42 q2 -14 14 -10 q-2 8 8 6 q-2 12 -16 14 q-10 0 -6 -10z" fill="url(#${g}m)"/>
+    <path d="M150 48 l2.4 5 5 .8 -3.6 3.2 .8 5 -4.6 -2.4 -4.6 2.4 .8 -5 -3.6 -3.2 5 -.8z" fill="#FFF7EE"/>
+    <ellipse cx="180" cy="92" rx="22" ry="16" transform="rotate(10 180 92)" fill="${c.muzzle}"/>
+    <ellipse cx="186" cy="96" rx="12" ry="6" transform="rotate(10 180 92)" fill="${c.muzzle2}"/>
     <ellipse cx="191" cy="88" rx="2.6" ry="3.6" fill="${INK}"/>
     ${mouth(mood)}
-    ${eye(mood)}
-    ${mood === 'happy' || mood === 'ok' ? '<ellipse cx="160" cy="84" rx="7" ry="4.5" fill="#F28B82" opacity=".5"/>' : ''}
+    ${eye(mood, g)}
+    <ellipse cx="160" cy="84" rx="7" ry="4.5" fill="#F28B82" opacity="${mood === 'happy' || mood === 'ok' ? '.55' : '.25'}"/>
     ${wear('face')}
     ${wear('neck')}
     ${wear('head')}
@@ -161,5 +174,5 @@
     });
   }
 
-  window.Mascot = { svg, mood, line, png, LINES, ITEMS, CATS, item, MOODS: ['happy', 'ok', 'worried', 'sad', 'sleep'] };
+  window.Mascot = { svg, mood, line, png, LINES, ITEMS, CATS, item, COATS, MANES, MOODS: ['happy', 'ok', 'worried', 'sad', 'sleep'] };
 })();

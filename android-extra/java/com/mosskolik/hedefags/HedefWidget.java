@@ -52,7 +52,13 @@ public class HedefWidget extends AppWidgetProvider {
             case "sleep": img = R.drawable.mascot_sleep; break;
             default: img = R.drawable.mascot_ok;
         }
-        v.setImageViewResource(R.id.w_mascot, img);
+        android.graphics.Bitmap custom = null;
+        try {
+            java.io.File f = new java.io.File(context.getFilesDir(), "mascot_" + mood + ".png");
+            if (f.exists()) custom = android.graphics.BitmapFactory.decodeFile(f.getAbsolutePath());
+        } catch (Exception ignored) { }
+        if (custom != null) v.setImageViewBitmap(R.id.w_mascot, custom);
+        else v.setImageViewResource(R.id.w_mascot, img);
         v.setTextViewText(R.id.w_say, HedefState.moodLine(mood));
 
         int done = s.todayMinutes(), goal = s.goalMinutes();
@@ -68,7 +74,8 @@ public class HedefWidget extends AppWidgetProvider {
         }
         v.setTextViewText(R.id.w_next, next);
         int st = s.streak();
-        v.setTextViewText(R.id.w_streak, st > 0 ? "🔥 " + st + " gün" : "");
+        int coins = s.json.optInt("coins", 0);
+        v.setTextViewText(R.id.w_streak, (st > 0 ? "🔥 " + st + "  " : "") + "🥕 " + coins);
 
         v.setTextViewText(R.id.w_quote, s.quoteOfDay());
 

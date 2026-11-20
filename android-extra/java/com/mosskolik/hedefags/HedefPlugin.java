@@ -51,6 +51,23 @@ public class HedefPlugin extends Plugin {
         call.resolve();
     }
 
+    /** Giydirilmiş maskot görselini (PNG, base64) widget için kaydeder. */
+    @PluginMethod
+    public void saveMascot(PluginCall call) {
+        String mood = call.getString("mood", "");
+        String data = call.getString("data", "");
+        if (!mood.matches("happy|ok|worried|sad|sleep") || data.isEmpty()) { call.reject("geçersiz"); return; }
+        try {
+            byte[] bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT);
+            java.io.File f = new java.io.File(ctx().getFilesDir(), "mascot_" + mood + ".png");
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) { out.write(bytes); }
+            HedefWidget.updateAll(ctx());
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("kaydedilemedi");
+        }
+    }
+
     /** Odak bekçisi uygulamayı açtıysa hangi sekmeye gidileceğini bir kez verir. */
     @PluginMethod
     public void takeLaunchTab(PluginCall call) {

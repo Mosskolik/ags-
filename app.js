@@ -89,7 +89,7 @@
       doneToday: Object.keys(S.done).filter((x) => x.startsWith(k + '|')).map((x) => x.slice(11)),
       blocks: S.plan.blocks.map((b) => ({ id: b.id, dow: b.dow, start: b.start, minutes: b.minutes, name: subj(b.subjectId)?.short || subjName(b.subjectId) })),
       guard: { enabled: !!g.enabled, mode: g.mode || 'blocks', apps: g.apps || [], strict: !!g.strict, graceMin: Number(g.graceMin) || 10, labels },
-      quotes: window.QUOTES
+      quotes: window.QUOTES, coins: S.coins || 0, mascotName: S.mascotName || 'Rüzgar'
     };
     H.update({ json: JSON.stringify(snap) }).catch(() => {});
   }
@@ -142,6 +142,17 @@
     catch (e) { toast((e && e.message) || 'Takvime eklenemedi.', 4000); }
   }
 
+  // widget için giydirilmiş maskot görselleri (görünüm değişince yeniden çizilir)
+  async function renderWidgetMascots(force = false) {
+    const H = plugin('Hedef'); if (!H || !window.Mascot) return;
+    const key = JSON.stringify(mascotLook()) + '|v2';
+    if (!force && S.widgetLookKey === key) return;
+    try {
+      for (const m of window.Mascot.MOODS) await H.saveMascot({ mood: m, data: await window.Mascot.png(m, mascotLook(), 264) });
+      S.widgetLookKey = key; save();
+    } catch (e) { /* widget varsayılan görselle kalır */ }
+  }
+
   async function nativeShareFile(name, text) {
     const FS = plugin('Filesystem'); const SH = plugin('Share'); if (!FS || !SH) return false;
     const r = await FS.writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
@@ -174,7 +185,8 @@
       reminders: { enabled: false, morning: '08:30', evening: '21:30', blocks: true, fired: {} },
       timer: null,
       guard: { enabled: false, mode: 'blocks', apps: ['com.google.android.youtube', 'com.instagram.android', 'com.zhiliaoapp.musically', 'com.ss.android.ugc.trill'], strict: false, graceMin: 10 },
-      reviews: [], lastWeekly: null, updatedAt: 0
+      reviews: [], lastWeekly: null, updatedAt: 0,
+      coins: 0, earned: 0, owned: [], look: {}, mascotName: 'Rüzgar', awards: {}, coinLog: []
     };
   }
 
@@ -191,7 +203,7 @@
   let migrated = false;
   function mergeDefaults(s) {
     const d = defaultState();
-    const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan }, guard: { ...d.guard, ...(s.guard || {}) } };
+    const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan }, guard: { ...d.guard, ...(s.guard || {}) }, look: { ...(s.look || {}) }, awards: { ...(s.awards || {}) } };
     // eski tahmini tarihi ÖSYM'nin açıkladığı resmi tarihle değiştir
     if (m.profile.agsDate === OLD_DEFAULT_DATE) { m.profile.agsDate = '2027-05-08'; m.profile.oabtDate = '2027-05-09'; migrated = true; }
     return m;
@@ -301,8 +313,30 @@
     for (const s of S.subjects) for (const t of s.topics) { const d = reviewDue(t); if (d && d <= today) out.push({ s, t, late: daysBetween(d, today) }); }
     return out.sort((a, b) => b.late - a.late);
   }
+  // ------------------------------------------------------------ havuç 🥕
+  const mascotLook = () => S.look || {};
+  /** Havuç kazandırır; art arda gelen ödülleri tek bildirimde toplar. */
+  let pendingAward = null; let awardT = null;
+  function award(n, why) {
+    n = Math.round(n); if (n <= 0) return;
+    S.coins = (S.coins || 0) + n; S.earned = (S.earned || 0) + n;
+    S.coinLog = [{ d: dkey(), n, why }, ...(S.coinLog || [])].slice(0, 40);
+    pendingAward = pendingAward ? { n: pendingAward.n + n, why: pendingAward.why } : { n, why };
+    clearTimeout(awardT); awardT = setTimeout(() => {
+      const a = pendingAward; pendingAward = null; if (!a) return;
+      toast(`+${a.n} 🥕 ${a.why} — ${S.mascotName || 'Rüzgar'} çok mutlu!`, 3800);
+      document.querySelectorAll('.coin-chip').forEach((el) => { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); });
+    }, 350);
+  }
+  /** Günlük hedef tamamlandıysa günde bir kez bonus verir. */
+  function checkGoalAward(dateK) {
+    const g = goalOn(parseD(dateK)); S.awards = S.awards || {};
+    if (!g || S.awards['goal|' + dateK] || minutesOn(dateK) < g) return;
+    S.awards['goal|' + dateK] = 1;
+    award(20 + Math.min(streak(), 10) * 2, 'Günlük hedef tamam');
+  }
   function setTopicStatus(t, v) {
-    if (v >= 2 && t.status < 2) { t.doneAt = dkey(); t.reviews = 0; t.lastReview = null; }
+    if (v >= 2 && t.status < 2) { t.doneAt = dkey(); t.reviews = 0; t.lastReview = null; if (!t.rewarded) { t.rewarded = true; award(3, 'Konu bitti'); } }
     if (v < 2) { t.doneAt = null; t.reviews = 0; t.lastReview = null; }
     t.status = v;
   }
@@ -507,17 +541,18 @@
     { id: 'topics', title: 'Konular', icon: '☰' },
     { id: 'exams', title: 'Denemeler', icon: '✎' },
     { id: 'yl', title: 'Yüksek Lisans', icon: '🎓' },
+    { id: 'ahir', title: 'Ahır', icon: '🐴' },
     { id: 'stats', title: 'Analiz', icon: '📈' },
     { id: 'guide', title: 'Rehber', icon: '🧭' },
     { id: 'ayarlar', title: 'Ayarlar', icon: '⚙' }
   ];
-  const TAB_IDS = ['today', 'plan', 'study', 'stats', 'more'];
+  const TAB_IDS = ['today', 'plan', 'study', 'ahir', 'more'];
   let current = (location.hash || '#today').slice(1);
   if (!VIEWS.find((v) => v.id === current) && current !== 'more') current = 'today';
 
   function renderNav() {
     $('#nav').innerHTML = VIEWS.map((v) => `<a href="#${v.id}" class="${v.id === current ? 'active' : ''}"><span class="ico">${v.icon}</span>${v.title}</a>`).join('');
-    const more = ['topics', 'exams', 'yl', 'guide', 'ayarlar', 'more'].includes(current);
+    const more = ['topics', 'exams', 'yl', 'stats', 'guide', 'ayarlar', 'more'].includes(current);
     $('#tabbar').innerHTML = TAB_IDS.map((id) => {
       if (id === 'more') return `<a href="#more" class="${more ? 'active' : ''}"><span class="ico">⋯</span>Diğer</a>`;
       const v = VIEWS.find((x) => x.id === id);
@@ -528,13 +563,14 @@
     $('#countdown-mini').innerHTML = dl >= 0 ? `<b>${dl}</b> gün<br><small>AGS: ${fmtDate(parseD(S.profile.agsDate))} ${parseD(S.profile.agsDate).getFullYear()}${od !== null && od >= 0 ? `<br>ÖABT: ${fmtDate(parseD(S.profile.oabtDate))} · ${od} gün` : ''}</small>` : '';
     const st = streak();
     $('#streak-chip').textContent = st ? `🔥 ${st} gün` : `⏳ ${Math.max(dl, 0)} gün`;
+    const cc = $('#coin-chip'); if (cc) cc.textContent = `🥕 ${S.coins || 0}`;
   }
 
   function render() {
     renderNav();
     const v = VIEWS.find((x) => x.id === current);
     $('#page-title').textContent = current === 'more' ? 'Diğer' : v.title;
-    const fn = { today: vToday, plan: vPlan, study: vStudy, topics: vTopics, exams: vExams, yl: vYL, stats: vStats, guide: vGuide, ayarlar: vSettings, more: vMore }[current];
+    const fn = { today: vToday, plan: vPlan, study: vStudy, topics: vTopics, exams: vExams, yl: vYL, stats: vStats, ahir: vShop, guide: vGuide, ayarlar: vSettings, more: vMore }[current];
     $('#view').innerHTML = fn();
     renderTimerChip();
     if (current === 'study') tickTimer();
@@ -543,7 +579,7 @@
   }
 
   function vMore() {
-    return `<div class="grid-more">${['topics', 'exams', 'yl', 'guide', 'ayarlar'].map((id) => { const v = VIEWS.find((x) => x.id === id); return `<a class="card more-card" href="#${id}"><span class="big-ico">${v.icon}</span>${v.title}</a>`; }).join('')}</div>`;
+    return `<div class="grid-more">${['stats', 'topics', 'exams', 'yl', 'guide', 'ayarlar'].map((id) => { const v = VIEWS.find((x) => x.id === id); return `<a class="card more-card" href="#${id}"><span class="big-ico">${v.icon}</span>${v.title}</a>`; }).join('')}</div>`;
   }
 
   function blockRow(b, d, { actions = true } = {}) {
@@ -581,7 +617,7 @@
     const md = window.Mascot ? window.Mascot.mood({ todayMin: tMin, goal: tGoal, yesterdayMin: minutesOn(dkey(addDays(today, -1))), hour: hr }) : null;
     return `
     <div class="hero card">
-      ${md ? `<div class="mascot" title="Rüzgar">${window.Mascot.svg(md, 96, 'hero')}<span class="bubble">${esc(window.Mascot.line(md))}</span></div>` : ''}
+      ${md ? `<a class="mascot" href="#ahir" title="${esc(S.mascotName || 'Rüzgar')} — ahıra git">${window.Mascot.svg(md, 96, 'hero', mascotLook())}<span class="bubble"><b>${esc(S.mascotName || 'Rüzgar')}:</b> ${esc(window.Mascot.line(md))}</span></a>` : ''}
       <div class="hero-text">
         <p class="eyebrow">${DAYS[dow(today)]}, ${fmtDate(today)}</p>
         <h2>${greet}${S.profile.name ? ', ' + esc(S.profile.name) : ''}</h2>
@@ -693,6 +729,10 @@
         <div class="field-row">
           <label>Süre (dk)<select id="t-target" ${t ? 'disabled' : ''}>${[25, 30, 40, 50, 60, 90, 110].map((m) => `<option ${m === target ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
         </div>
+        ${window.Mascot ? `<div class="sprint ${t && t.running ? 'running' : ''}">
+          <div class="sprint-horse">${window.Mascot.svg(t && t.running ? 'happy' : t ? 'worried' : 'ok', 92, 'sprint', mascotLook())}</div>
+          <span class="bubble">${t && t.running ? `Dört nala! Her 5 dakika = 1 🥕${t.blockId ? ', blok bitince +5' : ''}` : t ? 'Mola mı? Hadi devam edelim!' : 'Başla’ya bas, birlikte koşalım. 🥕 kazan!'}</span>
+        </div>` : ''}
         <div class="clock" id="clock" style="--c:${subjColor(sid)}">
           <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" class="clock-bg"/><circle cx="60" cy="60" r="54" class="clock-fg" id="clock-arc" pathLength="100"/></svg>
           <div class="clock-t"><b id="clock-time">00:00</b><small id="clock-sub">${t ? (t.running ? 'çalışıyor' : 'duraklatıldı') : 'hazır'}</small></div>
@@ -783,11 +823,14 @@
     } else if (sess.topicId) {
       const t = subj(sess.subjectId)?.topics.find((x) => x.id === sess.topicId); if (t && t.status === 0) t.status = 1;
     }
-    if (extra.blockId) S.done[`${sess.date}|${extra.blockId}`] = true;
+    let blockDone = false;
+    if (extra.blockId) { S.done[`${sess.date}|${extra.blockId}`] = true; blockDone = true; }
     else { // plana uyan bloğu otomatik işaretle
       const d = parseD(sess.date); const b = blocksFor(d).find((b) => b.subjectId === sess.subjectId && !isDone(d, b));
-      if (b && sess.minutes >= b.minutes * 0.6) S.done[`${sess.date}|${b.id}`] = true;
+      if (b && sess.minutes >= b.minutes * 0.6) { S.done[`${sess.date}|${b.id}`] = true; blockDone = true; }
     }
+    award(Math.floor(Math.min(sess.minutes, 240) / 5) + (blockDone ? 5 : 0), blockDone ? 'Blok tamamlandı' : 'Çalışma');
+    checkGoalAward(sess.date);
     save();
     toast(`Kaydedildi: ${fmtMin(sess.minutes)} ${subj(sess.subjectId)?.short || ''} ✓`);
   }
@@ -978,7 +1021,7 @@
     (v, f) => {
       S.reviews = S.reviews || [];
       S.reviews.push({ date: dkey(), good: f.good, hard: f.hard, next: f.next, energy: Number(f.energy) || 3, load: f.load });
-      S.lastWeekly = dkey();
+      S.lastWeekly = dkey(); award(10, 'Haftalık değerlendirme');
       let msg = 'Değerlendirme kaydedildi.';
       if (f.load === 'heavy') { S.profile.hours = S.profile.hours.map((h) => Math.max(0, Math.round((h * 0.85) * 2) / 2)); msg = 'Günlük saatleri ~%15 azalttım; sürdürülebilirlik her şeyden önemli.'; }
       if (f.load === 'light') { S.profile.hours = S.profile.hours.map((h) => Math.min(14, h + 0.5)); msg = 'Her güne 30 dk ekledim. Zorlarsa geri alırız.'; }
@@ -1140,6 +1183,47 @@
       <div class="perm-row"><span>Pil kısıtlamasını kaldır <small class="muted">(bekçi kapanmasın)</small></span><span></span><button type="button" class="btn sm ghost" data-act="permBattery">Ayarla</button></div>
       <div class="btn-row end"><button class="btn">Kaydet</button></div>
     </form>`;
+  }
+
+  // -------------------------------------------------------------- ahır 🐴
+  let shopCat = 'head';
+  function vShop() {
+    const M = window.Mascot; if (!M) return '<p class="muted">Maskot yüklenemedi.</p>';
+    const look = mascotLook(); const today = new Date();
+    const md = M.mood({ todayMin: minutesOn(dkey(today)), goal: goalOn(today), yesterdayMin: minutesOn(dkey(addDays(today, -1))), hour: today.getHours() });
+    const owned = new Set(S.owned || []);
+    const list = M.ITEMS.filter((i) => i.cat === shopCat);
+    const isOn = (i) => look[i.cat] === i.id;
+    const log = (S.coinLog || []).slice(0, 6);
+    return `
+    <section class="card shop-hero">
+      <div class="stage">${M.svg(md, 260, 'stage', look)}</div>
+      <div class="shop-info">
+        <form data-form="mascot" class="name-row"><input id="mascot-name" name="name" value="${esc(S.mascotName || 'Rüzgar')}" maxlength="18" aria-label="Maskotun adı"><button class="btn sm ghost">Adını kaydet</button></form>
+        <p class="bubble-l">${esc(M.line(md))}</p>
+        <div class="wallet"><span class="coin-big">🥕 ${S.coins || 0}</span><small class="muted">havuç · toplam kazanılan ${S.earned || 0}</small></div>
+        <ul class="earn">
+          <li><b>1 🥕</b> her 5 dk çalışma</li><li><b>+5</b> planlı blok</li><li><b>+20</b> günlük hedef (+seri bonusu)</li>
+          <li><b>+15</b> deneme girme</li><li><b>+3</b> konu bitirme</li><li><b>+2</b> tekrar</li><li><b>+10</b> haftalık değerlendirme</li>
+        </ul>
+      </div>
+    </section>
+    <section class="card">
+      <div class="cat-tabs">${Object.entries(M.CATS).map(([k, n]) => `<button class="${k === shopCat ? 'active' : ''}" data-act="shopCat" data-c="${k}">${n}</button>`).join('')}</div>
+      <div class="items">${list.map((i) => {
+        const prev = { ...look, [i.cat]: i.id };
+        const can = (S.coins || 0) >= i.price;
+        return `<div class="item ${isOn(i) ? 'on' : ''} ${owned.has(i.id) ? 'owned' : ''}">
+          <div class="item-pic">${M.svg('happy', 132, 'it' + i.id, prev)}</div>
+          <b>${esc(i.name)}</b>
+          ${owned.has(i.id)
+            ? `<button class="btn sm ${isOn(i) ? 'ghost' : ''}" data-act="equip" data-id="${i.id}">${isOn(i) ? 'Çıkar' : 'Giy'}</button>`
+            : `<button class="btn sm" data-act="buy" data-id="${i.id}" ${can ? '' : 'disabled'}>${can ? `Al · ${i.price} 🥕` : `${i.price} 🥕 · ${i.price - (S.coins || 0)} eksik`}</button>`}
+        </div>`;
+      }).join('')}</div>
+      ${shopCat === 'coat' || shopCat === 'mane' ? '<p class="muted small">Varsayılan: kestane at, koyu yele. Giydiğini çıkarınca varsayılana döner.</p>' : ''}
+    </section>
+    ${log.length ? `<section class="card"><div class="card-h"><h3>Son kazançlar</h3></div><ul class="coinlog">${log.map((x) => `<li><span>${esc(x.why)}</span><small class="muted">${fmtDate(parseD(x.d))}</small><b>+${x.n} 🥕</b></li>`).join('')}</ul></section>` : ''}`;
   }
 
   // ------------------------------------------------------------------ modal
@@ -1309,7 +1393,7 @@
     async delSession(el) { if (!(await ask('Bu çalışma kaydı silinsin mi?', 'Sil'))) return; S.sessions = S.sessions.filter((s) => s.id !== el.dataset.id); save(); render(); },
     openSubj(el) { openSubj = openSubj === el.dataset.id ? null : el.dataset.id; render(); },
     topicStatus(el) { const t = subj(el.dataset.s).topics.find((x) => x.id === el.dataset.t); setTopicStatus(t, Number(el.dataset.v)); save(); render(); },
-    reviewed(el) { const t = subj(el.dataset.s).topics.find((x) => x.id === el.dataset.t); t.reviews = (t.reviews || 0) + 1; t.lastReview = dkey(); if (t.reviews >= 3) t.status = 3; save(); render(); toast(t.reviews >= SR.length ? 'Konu kalıcı hafızada ★' : `Tekrar kaydedildi — sonraki: ${SR[t.reviews]} gün sonra`); },
+    reviewed(el) { const t = subj(el.dataset.s).topics.find((x) => x.id === el.dataset.t); award(2, 'Tekrar'); t.reviews = (t.reviews || 0) + 1; t.lastReview = dkey(); if (t.reviews >= 3) t.status = 3; save(); render(); toast(t.reviews >= SR.length ? 'Konu kalıcı hafızada ★' : `Tekrar kaydedildi — sonraki: ${SR[t.reviews]} gün sonra`); },
     weekly() { weeklyReview(); },
     cycleTopic(el) { const t = subj(el.dataset.s).topics.find((x) => x.id === el.dataset.t); setTopicStatus(t, (t.status + 1) % 4); save(); render(); },
     addTopic(el) { const inp = $(`#new-topic-${el.dataset.s}`); const n = inp.value.trim(); if (!n) return; subj(el.dataset.s).topics.push({ id: uid(), name: n, status: 0 }); save(); render(); },
@@ -1336,6 +1420,20 @@
       if (p === 'granted') notify('Hedef AGS', 'Bildirimler çalışıyor 🎉'); else toast('Bildirim izni verilmedi.');
       render();
     },
+    shopCat(el) { shopCat = el.dataset.c; render(); },
+    buy(el) {
+      const i = window.Mascot.item(el.dataset.id); if (!i) return;
+      S.owned = S.owned || [];
+      if (S.owned.includes(i.id)) return;
+      if ((S.coins || 0) < i.price) return toast(`${i.price - S.coins} havuç daha lazım. Bir blok çalış, kazan! 🥕`);
+      S.coins -= i.price; S.owned.push(i.id); S.look = { ...mascotLook(), [i.cat]: i.id };
+      save(); render(); renderWidgetMascots(); toast(`${i.name} alındı ve giyildi! ${S.mascotName || 'Rüzgar'} bayıldı 🐴`, 3500);
+    },
+    equip(el) {
+      const i = window.Mascot.item(el.dataset.id); if (!i) return;
+      const look = { ...mascotLook() }; if (look[i.cat] === i.id) delete look[i.cat]; else look[i.cat] = i.id;
+      S.look = look; save(); render(); renderWidgetMascots();
+    },
     async pinWidget() { const H = plugin('Hedef'); try { await H.pinWidget(); } catch (e) { toast('Ana ekranda boş yere basılı tut → Widget’lar → Hedef AGS', 5000); } },
     phoneAlarms() { setPhoneAlarms(); },
     phoneCalendar() { addToPhoneCalendar(); },
@@ -1353,7 +1451,7 @@
       res[m[2]] = res[m[2]] || { d: 0, y: 0 }; res[m[2]][m[1]] = Number(v) || 0;
     }
     if (existing) Object.assign(existing, { date: f.date, name: f.name, res });
-    else S.exams.push({ id: uid(), date: f.date, name: f.name || `${f.type} denemesi`, type: f.type, res });
+    else { S.exams.push({ id: uid(), date: f.date, name: f.name || `${f.type} denemesi`, type: f.type, res }); award(15, 'Deneme girildi'); }
     generatePlan(); save(); render(); toast('Deneme kaydedildi — program sonuçlarına göre güncellendi');
   }
 
@@ -1383,6 +1481,8 @@
       if (isNative) scheduleNative(R.enabled).then((r) => { if (r === 'denied' && R.enabled) toast('Bildirim izni verilmedi; telefon ayarlarından izin ver.', 4000); });
       else if (R.enabled && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().then(render);
       toast(R.enabled ? 'Hatırlatıcılar açık' : 'Hatırlatıcılar kapalı');
+    } else if (form.dataset.form === 'mascot') {
+      S.mascotName = (f.name || '').trim().slice(0, 18) || 'Rüzgar'; toast(`Maskotunun adı artık ${S.mascotName} 🐴`);
     } else if (form.dataset.form === 'guard') {
       const g = S.guard; g.enabled = !!f.enabled; g.mode = f.mode; g.strict = !!f.strict; g.graceMin = clamp(Number(f.graceMin) || 10, 1, 60);
       g.apps = GUARD_APPS.map(([pkg]) => pkg).filter((pkg) => f['app:' + pkg]);
@@ -1426,6 +1526,6 @@
   let lastDay = dkey(); setInterval(() => { if (dkey() !== lastDay) { lastDay = dkey(); render(); } }, 60000);
 
   initCloud();
-  if (isNative) { scheduleNative(false); nativeSync(); takeLaunchTab(); }
+  if (isNative) { scheduleNative(false); nativeSync(); takeLaunchTab(); setTimeout(() => renderWidgetMascots(), 1500); }
   window.__hedef = { get state() { return S; }, generatePlan, coachMessages };
 })();
