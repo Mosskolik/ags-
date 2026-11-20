@@ -235,6 +235,8 @@
   }
 
   // ----------------------------------------------------------------- state
+  // Kullanıcının çalışmadığı dersler (Ayarlar → Çalıştığım dersler'den geri açılabilir)
+  const SUBJECTS_OFF_V1 = ['tib', 'yldersler', 'felsefe', 'sayisal'];
   function defaultState() {
     return {
       v: 1,
@@ -249,8 +251,9 @@
         block: 50, brk: 10
       },
       subjects: JSON.parse(JSON.stringify(window.DEFAULT_SUBJECTS)).map((s) => ({
-        ...s, topics: s.topics.map((t) => ({ id: uid(), name: t, status: 0 }))
+        ...s, off: SUBJECTS_OFF_V1.includes(s.id), topics: s.topics.map((t) => ({ id: uid(), name: t, status: 0 }))
       })),
+      migrations: { subjOffV1: 1 },
       sessions: [], // {id,date,subjectId,topicId,minutes,questions,correct,wrong,note,blockId}
       exams: [],    // {id,date,name,type,res:{subjectId:{d,y}}}
       tasks: window.DEFAULT_YL_TASKS.map((t) => ({ id: uid(), title: t.title, type: t.type, due: '', done: false })),
@@ -280,6 +283,12 @@
     const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan }, guard: { ...d.guard, ...(s.guard || {}), media: { ...d.guard.media, ...((s.guard || {}).media || {}) } }, look: { ...(s.look || {}) }, awards: { ...(s.awards || {}) } };
     // eski tahmini tarihi ÖSYM'nin açıkladığı resmi tarihle değiştir
     m.dayRatings = { ...(s.dayRatings || {}) };
+    m.migrations = { ...(s.migrations || {}) };
+    if (!m.migrations.subjOffV1) {
+      m.migrations.subjOffV1 = 1;
+      for (const sb of m.subjects || []) if (SUBJECTS_OFF_V1.includes(sb.id)) sb.off = true;
+      m.needPlanRegen = true;
+    }
     if (!m.firstDay) m.firstDay = (s.sessions || []).reduce((a, x) => (!a || x.date < a ? x.date : a), null) || null;
     if (m.guard && m.guard.media && Array.isArray(m.guard.media.keywords) && typeof OLD_DEFAULT_KEYWORDS_V1 !== 'undefined' && sameList(m.guard.media.keywords, OLD_DEFAULT_KEYWORDS_V1)) m.guard.media.keywords = null;
     if (m.profile.agsDate === OLD_DEFAULT_DATE) { m.profile.agsDate = '2027-05-08'; m.profile.oabtDate = '2027-05-09'; migrated = true; }
@@ -341,7 +350,8 @@
   }
 
   const subj = (id) => S.subjects.find((s) => s.id === id);
-  const examSubjects = () => S.subjects.filter((s) => s.group !== 'yl');
+  const examSubjects = () => S.subjects.filter((s) => s.group !== 'yl' && !s.off);
+  const activeSubjects = () => S.subjects.filter((s) => !s.off);
   const subjName = (id) => (id === 'deneme' ? 'Deneme Sınavı' : (subj(id)?.name || 'Genel'));
   const subjColor = (id) => (id === 'deneme' ? '#0f5c4d' : (subj(id)?.color || '#64748b'));
 
@@ -387,7 +397,7 @@
   }
   function dueReviews() {
     const today = parseD(dkey()); const out = [];
-    for (const s of S.subjects) for (const t of s.topics) { const d = reviewDue(t); if (d && d <= today) out.push({ s, t, late: daysBetween(d, today) }); }
+    for (const s of S.subjects) if (!s.off) for (const t of s.topics) { const d = reviewDue(t); if (d && d <= today) out.push({ s, t, late: daysBetween(d, today) }); }
     return out.sort((a, b) => b.late - a.late);
   }
   // ------------------------------------------------------------ havuç 🥕
@@ -505,7 +515,9 @@
       let yl = d.yl; let k = 0;
       while (yl >= 25) {
         const m = yl >= blockLen ? blockLen : yl;
-        const sid = (d.i + k) % 3 === 2 ? 'yldersler' : 'tez';
+        const ylIds = ['tez', 'yldersler'].filter((id) => subj(id) && !subj(id).off);
+        if (!ylIds.length) break;
+        const sid = ylIds.length > 1 && (d.i + k) % 3 === 2 ? 'yldersler' : ylIds[0];
         blocks.push({ id: uid(), dow: d.i, start: toHHMM(t), minutes: m, subjectId: sid, kind: sid === 'tez' ? 'yazım' : 'okuma' });
         t += m + brk; yl -= m + brk; k++;
       }
@@ -941,7 +953,7 @@
   // ------------------------------------------------------------------ timer
   function timerElapsed() { const t = S.timer; if (!t) return 0; return t.acc + (t.running ? (Date.now() - t.startedAt) : 0); }
   function subjectOptions(sel, { includeYL = true } = {}) {
-    return Object.entries(window.GROUPS).filter(([g]) => includeYL || g !== 'yl').map(([g, G]) => `<optgroup label="${G.name}">${S.subjects.filter((s) => s.group === g).map((s) => `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</optgroup>`).join('');
+    return Object.entries(window.GROUPS).filter(([g]) => includeYL || g !== 'yl').map(([g, G]) => `<optgroup label="${G.name}">${S.subjects.filter((s) => s.group === g && (!s.off || s.id === sel)).map((s) => `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</optgroup>`).join('');
   }
   function topicOptions(sid, sel) {
     const s = subj(sid); if (!s) return '<option value="">—</option>';
@@ -1073,7 +1085,8 @@
   let openSubj = null;
   function vTopics() {
     return Object.entries(window.GROUPS).map(([g, G]) => {
-      const list = S.subjects.filter((s) => s.group === g);
+      const list = S.subjects.filter((s) => s.group === g && !s.off);
+      if (!list.length) return '';
       const avg = list.reduce((a, s) => a + topicProgress(s), 0) / (list.length || 1);
       return `<section class="card">
         <div class="card-h"><div><h3>${G.name}</h3><p class="muted small">${G.desc}</p></div><b>%${Math.round(avg * 100)}</b></div>
@@ -1363,6 +1376,13 @@
     </form>
 
     ${isNative ? nativeSettingsHTML() : ''}
+    <form class="card" data-form="subjects">
+      <div class="card-h"><h3>Çalıştığım dersler</h3></div>
+      <p class="muted small">İşareti kaldırdığın derslere program blok ayırmaz; Konular, Analiz ve ders seçimlerinde görünmez. Geçmiş çalışma kayıtların silinmez.</p>
+      ${Object.entries(window.GROUPS).map(([g, G]) => `<h4>${G.name}</h4><div class="apps">${S.subjects.filter((x) => x.group === g).map((x) => `<label class="switch"><input type="checkbox" name="on:${x.id}" ${x.off ? '' : 'checked'}> ${esc(x.name)}</label>`).join('')}</div>`).join('')}
+      <div class="btn-row end"><button class="btn">Kaydet ve programı güncelle</button></div>
+    </form>
+
     <form class="card" data-form="weights">
       <div class="card-h"><h3>Ders ağırlıkları (soru sayısı)</h3></div>
       <p class="muted small">Varsayılanlar tahminidir. ÖSYM’nin güncel AGS / ÖABT kılavuzundaki soru dağılımına göre düzenle.</p>
@@ -1761,6 +1781,10 @@
       g.apps = GUARD_APPS.map(([pkg]) => pkg).filter((pkg) => f['app:' + pkg]);
       toast(g.enabled ? (g.strict ? 'Odak bekçisi sıkı modda açık 🔒' : 'Odak bekçisi açık') : 'Odak bekçisi kapalı');
       nativeStatus().then((st) => { if (g.enabled && st && !st.usage) toast('Bekçinin çalışması için “Kullanım erişimi” iznini ver.', 5000); });
+    } else if (form.dataset.form === 'subjects') {
+      for (const x of S.subjects) x.off = !f['on:' + x.id];
+      if (!examSubjects().length) { S.subjects.find((x) => x.id === 'egitim').off = false; toast('En az bir sınav dersi açık kalmalı.'); }
+      generatePlan(); toast('Dersler güncellendi, program yeniden oluşturuldu');
     } else if (form.dataset.form === 'weights') {
       for (const s of examSubjects()) s.weight = clamp(Number(f['w_' + s.id]) || 0, 0, 80);
       generatePlan(); toast('Ağırlıklar kaydedildi');
@@ -1789,6 +1813,7 @@
     navigator.serviceWorker.register('sw.js').then((r) => { swReg = r; }).catch(() => {});
   }
   if (migrated) { migrated = false; save(); setTimeout(() => toast('Sınav tarihi ÖSYM takvimine göre güncellendi: AGS 8 Mayıs 2027', 5000), 400); }
+  if (S.needPlanRegen) { delete S.needPlanRegen; if (S.profile.onboarded) generatePlan(); save(); }
   if (S.profile.onboarded && !S.plan.blocks.length) generatePlan();
   function welcomeGift() { S.awards = S.awards || {}; if (S.awards.welcome) return; S.awards.welcome = 1; award(30, 'Hoş geldin hediyesi'); save(); }
   if (S.profile.onboarded) setTimeout(welcomeGift, 1200);
