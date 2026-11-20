@@ -292,3 +292,31 @@ dialog form { padding: 20px; } dialog h3 { margin-bottom: 12px; font-size: 1.2re
 .keydates li.past { opacity: .5; }
 @media (max-width: 760px) { .keydates { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 420px) { .keydates { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Android ayarları */
+.apps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.apps label.switch { margin-bottom: 6px; font-size: .92rem; }
+.strict { margin-top: 10px; padding: 12px; border-radius: 10px; border: 1px dashed var(--bad); }
+.strict label.switch { margin-bottom: 4px; }
+.perm-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
+.perm-row small { display: block; }
+.chip.chip-ok { color: var(--good); border-color: var(--good); }
+.chip.chip-no { color: var(--warn); border-color: var(--warn); }
+
+/* maskot Hüdhüd */
+.hero { flex-wrap: wrap; }
+.hero-text { flex: 1 1 220px; min-width: 0; }
+.mascot { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; max-width: 150px; }
+.mascot svg { width: 96px; height: auto; display: block; filter: drop-shadow(0 4px 6px rgba(0,0,0,.18)); }
+.mascot .bubble { background: var(--surface); color: var(--text); font-size: .78rem; line-height: 1.3; padding: 6px 10px; border-radius: 12px; text-align: center; position: relative; }
+.mascot .bubble::before { content: ""; position: absolute; top: -6px; left: 50%; margin-left: -6px; border: 6px solid transparent; border-top: 0; border-bottom-color: var(--surface); }
+@media (max-width: 560px) {
+  .mascot { flex-direction: row; max-width: none; width: 100%; gap: 10px; }
+  .mascot svg { width: 78px; }
+  .mascot .bubble { text-align: left; font-size: .85rem; }
+  .mascot .bubble::before { top: 50%; left: -6px; margin: -6px 0 0; border: 6px solid transparent; border-left: 0; border-right-color: var(--surface); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mascot svg { animation: hop 2.6s ease-in-out infinite; transform-origin: 50% 100%; }
+  @keyframes hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+}

@@ -68,6 +68,80 @@
       return 'ok';
     } catch (e) { return 'error'; }
   }
+  // ---- widget, odak bekçisi, alarm ve takvim (yalnızca APK)
+  const GUARD_APPS = [
+    ['com.google.android.youtube', 'YouTube'], ['com.instagram.android', 'Instagram'],
+    ['com.zhiliaoapp.musically', 'TikTok'], ['com.ss.android.ugc.trill', 'TikTok Lite'],
+    ['com.twitter.android', 'X (Twitter)'], ['com.facebook.katana', 'Facebook'],
+    ['com.netflix.mediaclient', 'Netflix'], ['com.snapchat.android', 'Snapchat'],
+    ['com.reddit.frontpage', 'Reddit'], ['tv.twitch.android.app', 'Twitch']
+  ];
+  let syncT = null;
+  function nativeSyncSoon() { if (!isNative) return; clearTimeout(syncT); syncT = setTimeout(nativeSync, 800); }
+  function nativeSync() {
+    const H = plugin('Hedef'); if (!H) return;
+    const today = new Date(); const k = dkey(today); const g = S.guard || {};
+    const labels = {}; for (const [pkg, n] of GUARD_APPS) labels[pkg] = n;
+    const snap = {
+      name: S.profile.name, agsDate: S.profile.agsDate, dateKey: k,
+      todayMin: minutesOn(k), yesterdayMin: minutesOn(dkey(addDays(today, -1))), goals: S.profile.hours.map((h) => Math.round(h * 60)), streak: streak(),
+      timerRunning: !!(S.timer && S.timer.running), timerSubject: S.timer ? (subj(S.timer.subjectId)?.short || '') : '',
+      doneToday: Object.keys(S.done).filter((x) => x.startsWith(k + '|')).map((x) => x.slice(11)),
+      blocks: S.plan.blocks.map((b) => ({ id: b.id, dow: b.dow, start: b.start, minutes: b.minutes, name: subj(b.subjectId)?.short || subjName(b.subjectId) })),
+      guard: { enabled: !!g.enabled, mode: g.mode || 'blocks', apps: g.apps || [], strict: !!g.strict, graceMin: Number(g.graceMin) || 10, labels },
+      quotes: window.QUOTES
+    };
+    H.update({ json: JSON.stringify(snap) }).catch(() => {});
+  }
+  async function takeLaunchTab() {
+    const H = plugin('Hedef'); if (!H) return;
+    try {
+      const r = await H.takeLaunchTab();
+      if (r && r.tab) { location.hash = '#' + r.tab; if (r.message) setTimeout(() => toast(r.message, 6000), 300); }
+    } catch (e) { /* yok */ }
+  }
+  async function nativeStatus() {
+    const H = plugin('Hedef'); if (!H) return null;
+    try { return await H.status(); } catch (e) { return null; }
+  }
+  async function fillNativeStatus() {
+    const st = await nativeStatus(); if (!st) return;
+    const set = (id, ok, okText, noText) => { const el = document.getElementById(id); if (el) { el.textContent = ok ? okText : noText; el.className = 'chip ' + (ok ? 'chip-ok' : 'chip-no'); } };
+    set('st-usage', st.usage, 'verildi', 'gerekli');
+    set('st-overlay', st.overlay, 'verildi', 'gerekli');
+    set('st-guard', st.guardRunning, 'çalışıyor', 'kapalı');
+    const w = document.getElementById('st-widget'); if (w) w.textContent = st.widgets ? `${st.widgets} widget ekli` : 'henüz eklenmedi';
+  }
+  function alarmDays(pred) { return [0, 1, 2, 3, 4, 5, 6].filter(pred).map((i) => (i === 6 ? 1 : i + 2)); }
+  async function setPhoneAlarms() {
+    const H = plugin('Hedef'); if (!H) return;
+    const P = S.profile; const R = S.reminders;
+    const hm = (t) => { const m = toMin(t); return { hour: Math.floor(m / 60), minute: m % 60 }; };
+    const jobs = [
+      { ...hm(R.morning), message: 'Hedef AGS: Bugünkü planına bak ☀️', days: alarmDays((i) => P.hours[i] > 0) },
+      { ...hm(P.startTime), message: 'Hedef AGS: Çalışma zamanı 📚', days: alarmDays((i) => i < 5 && P.hours[i] > 0) },
+      { ...hm(P.weekendStart), message: 'Hedef AGS: Hafta sonu çalışma zamanı 📚', days: alarmDays((i) => i >= 5 && P.hours[i] > 0) }
+    ].filter((j) => j.days.length);
+    let ok = 0;
+    for (const j of jobs) { try { await H.setAlarm(j); ok++; } catch (e) { /* atla */ } }
+    toast(ok ? `${ok} alarm Saat uygulamasına kuruldu ⏰` : 'Saat uygulaması alarm kabul etmedi.', 4000);
+  }
+  async function addToPhoneCalendar() {
+    const H = plugin('Hedef'); if (!H) return;
+    const monday = addDays(new Date(), -dow(new Date())); const ex = parseD(S.profile.agsDate);
+    const until = `${ex.getFullYear()}${pad(ex.getMonth() + 1)}${pad(ex.getDate())}T235959Z`;
+    const events = S.plan.blocks.map((b) => {
+      const d = addDays(monday, b.dow); const m = toMin(b.start); d.setHours(Math.floor(m / 60), m % 60, 0, 0);
+      return { title: `📚 ${subjName(b.subjectId)} — ${KIND[b.kind] || ''}`, start: d.getTime(), durationMin: b.minutes, rrule: `FREQ=WEEKLY;UNTIL=${until}`, reminderMin: 10 };
+    });
+    for (const k of keyDates().filter((x) => x.left >= 0)) {
+      const [y, mo, da] = k.d.split('-').map(Number);
+      events.push({ title: `🎯 ${k.t}`, start: Date.UTC(y, mo - 1, da), allDay: true, reminderMin: 15 * 60 });
+    }
+    try { const r = await H.addCalendarEvents({ events }); toast(`${r.added} etkinlik telefon takvimine eklendi 📅`, 4000); }
+    catch (e) { toast((e && e.message) || 'Takvime eklenemedi.', 4000); }
+  }
+
   async function nativeShareFile(name, text) {
     const FS = plugin('Filesystem'); const SH = plugin('Share'); if (!FS || !SH) return false;
     const r = await FS.writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
@@ -99,6 +173,7 @@
       done: {}, // "YYYY-MM-DD|blockId": true
       reminders: { enabled: false, morning: '08:30', evening: '21:30', blocks: true, fired: {} },
       timer: null,
+      guard: { enabled: false, mode: 'blocks', apps: ['com.google.android.youtube', 'com.instagram.android', 'com.zhiliaoapp.musically', 'com.ss.android.ugc.trill'], strict: false, graceMin: 10 },
       reviews: [], lastWeekly: null, updatedAt: 0
     };
   }
@@ -116,7 +191,7 @@
   let migrated = false;
   function mergeDefaults(s) {
     const d = defaultState();
-    const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan } };
+    const m = { ...d, ...s, profile: { ...d.profile, ...s.profile }, reminders: { ...d.reminders, ...s.reminders }, plan: { ...d.plan, ...s.plan }, guard: { ...d.guard, ...(s.guard || {}) } };
     // eski tahmini tarihi ÖSYM'nin açıkladığı resmi tarihle değiştir
     if (m.profile.agsDate === OLD_DEFAULT_DATE) { m.profile.agsDate = '2027-05-08'; m.profile.oabtDate = '2027-05-09'; migrated = true; }
     return m;
@@ -140,6 +215,7 @@
     try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* tarayıcı depolaması yok */ }
     if (cloud) { clearTimeout(cloudT); cloudT = setTimeout(pushCloud, 1500); }
     scheduleNativeSoon();
+    nativeSyncSoon();
   }
   async function pushCloud() {
     if (!cloud) return;
@@ -463,6 +539,7 @@
     renderTimerChip();
     if (current === 'study') tickTimer();
     setSync(syncState);
+    if (isNative && current === 'ayarlar') fillNativeStatus();
   }
 
   function vMore() {
@@ -501,9 +578,11 @@
     const msgs = coachMessages();
     const tasks = S.tasks.filter((t) => !t.done).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999')).slice(0, 4);
 
+    const md = window.Mascot ? window.Mascot.mood({ todayMin: tMin, goal: tGoal, yesterdayMin: minutesOn(dkey(addDays(today, -1))), hour: hr }) : null;
     return `
     <div class="hero card">
-      <div>
+      ${md ? `<div class="mascot" title="Hüdhüd">${window.Mascot.svg(md, 96, 'hero')}<span class="bubble">${esc(window.Mascot.line(md))}</span></div>` : ''}
+      <div class="hero-text">
         <p class="eyebrow">${DAYS[dow(today)]}, ${fmtDate(today)}</p>
         <h2>${greet}${S.profile.name ? ', ' + esc(S.profile.name) : ''}</h2>
         <p class="muted">Bugünkü hedef: <b>${fmtMin(tGoal)}</b> · ${blocks.length} blok</p>
@@ -1000,6 +1079,7 @@
       </div>`}
     </form>
 
+    ${isNative ? nativeSettingsHTML() : ''}
     <form class="card" data-form="weights">
       <div class="card-h"><h3>Ders ağırlıkları (soru sayısı)</h3></div>
       <p class="muted small">Varsayılanlar tahminidir. ÖSYM’nin güncel AGS / ÖABT kılavuzundaki soru dağılımına göre düzenle.</p>
@@ -1015,6 +1095,51 @@
       <button class="btn ghost danger" data-act="reset">Sıfırla</button></div>
     </section>
     <p class="muted small center">Hedef AGS · çevrimdışı çalışır · v1.0</p>`;
+  }
+
+  function nativeSettingsHTML() {
+    const g = S.guard;
+    return `
+    <section class="card">
+      <div class="card-h"><h3>Ana ekran widget’ı</h3><span class="chip" id="st-widget">…</span></div>
+      <p class="muted small">Sınava kalan gün, bugünkü ilerleme, sıradaki blok ve günün sözü ana ekranında görünür.</p>
+      <div class="btn-row"><button type="button" class="btn" data-act="pinWidget">Ana ekrana ekle</button></div>
+      <p class="muted small">Buton çalışmazsa: ana ekranda boş bir yere basılı tut → Widget’lar → Hedef AGS.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h3>Alarm ve takvim</h3></div>
+      <p class="muted small">Telefonunun Saat uygulamasına gerçek alarm kurar; program bloklarını ve sınav tarihlerini hatırlatmalarıyla telefon takvimine yazar.</p>
+      <div class="btn-row">
+        <button type="button" class="btn" data-act="phoneAlarms">⏰ Alarmları kur</button>
+        <button type="button" class="btn" data-act="phoneCalendar">📅 Takvime ekle</button>
+        <button type="button" class="btn ghost" data-act="phoneCalendarRemove">Takvimden kaldır</button>
+      </div>
+      <p class="muted small">Alarm saatleri: sabah planı (${esc(S.reminders.morning)}), hafta içi başlangıç (${esc(S.profile.startTime)}), hafta sonu başlangıç (${esc(S.profile.weekendStart)}). Program değişince takvime yeniden ekle; eskileri kendiliğinden silinir.</p>
+    </section>
+
+    <form class="card" data-form="guard">
+      <div class="card-h"><h3>Odak bekçisi</h3><span class="chip" id="st-guard">…</span></div>
+      <p class="muted small">Çalışma saatinde aşağıdaki uygulamalardan birini açarsan ekranı kaplayan bir uyarı çıkar. Bloğun başladığı hâlde sayaç çalışmıyorsa da seni uyarır.</p>
+      <label class="switch"><input type="checkbox" name="enabled" ${g.enabled ? 'checked' : ''}> Odak bekçisini aç</label>
+      <div class="field-row">
+        <label>Ne zaman?<select name="mode">
+          <option value="blocks" ${g.mode !== 'goal' ? 'selected' : ''}>Sadece çalışma bloklarında</option>
+          <option value="goal" ${g.mode === 'goal' ? 'selected' : ''}>Günlük hedef tamamlanana kadar</option></select></label>
+        <label>Blok başlayınca bekleme (dk)<input type="number" name="graceMin" min="1" max="60" value="${Number(g.graceMin) || 10}"></label>
+      </div>
+      <h4>İzlenecek uygulamalar</h4>
+      <div class="apps">${GUARD_APPS.map(([pkg, n]) => `<label class="switch"><input type="checkbox" name="app:${pkg}" ${g.apps.includes(pkg) ? 'checked' : ''}> ${n}</label>`).join('')}</div>
+      <div class="strict">
+        <label class="switch"><input type="checkbox" name="strict" ${g.strict ? 'checked' : ''}> <b>Sıkı mod</b></label>
+        <p class="muted small">Açıkken uyarıda “izin ver” düğmesi olmaz: uyarıya rağmen ${15} saniye içinde çıkmazsan o uygulamayı kapatır ve seni çalışma ekranına getirir. Blok başladığı hâlde ${Number(g.graceMin) || 10}+10 dakika çalışmazsan uygulamayı kendisi açar. İstediğin an buradan kapatabilirsin.</p>
+      </div>
+      <h4>Gerekli izinler</h4>
+      <div class="perm-row"><span>Kullanım erişimi <small class="muted">(hangi uygulamanın açık olduğunu görmek için)</small></span><span class="chip" id="st-usage">…</span><button type="button" class="btn sm" data-act="permUsage">Ver</button></div>
+      <div class="perm-row"><span>Diğer uygulamaların üzerinde göster <small class="muted">(tam ekran uyarı için)</small></span><span class="chip" id="st-overlay">…</span><button type="button" class="btn sm" data-act="permOverlay">Ver</button></div>
+      <div class="perm-row"><span>Pil kısıtlamasını kaldır <small class="muted">(bekçi kapanmasın)</small></span><span></span><button type="button" class="btn sm ghost" data-act="permBattery">Ayarla</button></div>
+      <div class="btn-row end"><button class="btn">Kaydet</button></div>
+    </form>`;
   }
 
   // ------------------------------------------------------------------ modal
@@ -1211,6 +1336,13 @@
       if (p === 'granted') notify('Hedef AGS', 'Bildirimler çalışıyor 🎉'); else toast('Bildirim izni verilmedi.');
       render();
     },
+    async pinWidget() { const H = plugin('Hedef'); try { await H.pinWidget(); } catch (e) { toast('Ana ekranda boş yere basılı tut → Widget’lar → Hedef AGS', 5000); } },
+    phoneAlarms() { setPhoneAlarms(); },
+    phoneCalendar() { addToPhoneCalendar(); },
+    async phoneCalendarRemove() { const H = plugin('Hedef'); try { await H.removeCalendarEvents(); toast('Hedef AGS etkinlikleri takvimden kaldırıldı'); } catch (e) { /* yok */ } },
+    async permUsage() { try { await plugin('Hedef').openUsageSettings(); toast('Listede Hedef AGS’yi bul ve izin ver, sonra geri dön.', 5000); } catch (e) { /* yok */ } },
+    async permOverlay() { try { await plugin('Hedef').openOverlaySettings(); } catch (e) { /* yok */ } },
+    async permBattery() { try { await plugin('Hedef').openBatterySettings(); toast('Hedef AGS → Kısıtlama yok / Optimize etme', 5000); } catch (e) { /* yok */ } },
     export() { download(`hedef-ags-yedek-${dkey()}.json`, JSON.stringify(S, null, 1), 'application/json'); toast('Yedek indirildi'); },
     async reset() { if (await ask('TÜM veriler silinecek. Önce yedek almanı öneririm.', 'Hepsini sil')) { S = defaultState(); save(); render(); onboarding(); } }
   };
@@ -1251,6 +1383,11 @@
       if (isNative) scheduleNative(R.enabled).then((r) => { if (r === 'denied' && R.enabled) toast('Bildirim izni verilmedi; telefon ayarlarından izin ver.', 4000); });
       else if (R.enabled && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().then(render);
       toast(R.enabled ? 'Hatırlatıcılar açık' : 'Hatırlatıcılar kapalı');
+    } else if (form.dataset.form === 'guard') {
+      const g = S.guard; g.enabled = !!f.enabled; g.mode = f.mode; g.strict = !!f.strict; g.graceMin = clamp(Number(f.graceMin) || 10, 1, 60);
+      g.apps = GUARD_APPS.map(([pkg]) => pkg).filter((pkg) => f['app:' + pkg]);
+      toast(g.enabled ? (g.strict ? 'Odak bekçisi sıkı modda açık 🔒' : 'Odak bekçisi açık') : 'Odak bekçisi kapalı');
+      nativeStatus().then((st) => { if (g.enabled && st && !st.usage) toast('Bekçinin çalışması için “Kullanım erişimi” iznini ver.', 5000); });
     } else if (form.dataset.form === 'weights') {
       for (const s of examSubjects()) s.weight = clamp(Number(f['w_' + s.id]) || 0, 0, 80);
       generatePlan(); toast('Ağırlıklar kaydedildi');
@@ -1272,7 +1409,7 @@
   }
 
   window.addEventListener('hashchange', () => { const h = location.hash.slice(1); current = VIEWS.find((v) => v.id === h) || h === 'more' ? h : 'today'; render(); window.scrollTo(0, 0); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { if (localStorage.getItem(KEY)) S = load(); } catch (e) { /* yok */ } render(); checkReminders(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { if (localStorage.getItem(KEY)) S = load(); } catch (e) { /* yok */ } render(); checkReminders(); if (isNative) { nativeSync(); takeLaunchTab(); } } });
 
   // ------------------------------------------------------------------- boot
   if (!isNative && 'serviceWorker' in navigator && location.protocol !== 'file:') {
@@ -1289,6 +1426,6 @@
   let lastDay = dkey(); setInterval(() => { if (dkey() !== lastDay) { lastDay = dkey(); render(); } }, 60000);
 
   initCloud();
-  if (isNative) scheduleNative(false);
+  if (isNative) { scheduleNative(false); nativeSync(); takeLaunchTab(); }
   window.__hedef = { get state() { return S; }, generatePlan, coachMessages };
 })();

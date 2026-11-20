@@ -95,11 +95,27 @@ window.DEFAULT_YL_TASKS = [
 
 window.QUOTES = [
   '“Rabbim, ilmimi artır.” (Tâhâ, 114)',
+  '“İnsan için ancak çalıştığının karşılığı vardır.” (Necm, 39)',
+  '“Şüphesiz zorlukla beraber bir kolaylık vardır.” (İnşirah, 6)',
+  '“Bir işi bitirince diğerine koyul.” (İnşirah, 7)',
+  '“Hiç bilenlerle bilmeyenler bir olur mu?” (Zümer, 9)',
+  '“İlim talep etmek her Müslümana farzdır.” (İbn Mâce)',
+  '“Allah, sizden birinizin yaptığı işi sağlam yapmasını sever.” (Beyhakî)',
+  '“Amellerin Allah katında en sevimlisi, az da olsa devamlı olanıdır.” (Buhârî)',
   'Az ama her gün çalışmak, çok ama ara sıra çalışmaktan iyidir.',
   'Bugün yaptığın tek bir blok bile seriyi korur.',
-  '“İnsan için ancak çalıştığının karşılığı vardır.” (Necm, 39)',
   'Yanlışlarını sev — en çok onlardan öğrenirsin.',
   'Deneme sınavı bir yargı değil, bir haritadır.',
   'Önce zor dersi, sonra kolay olanı çalış.',
-  'Mola da çalışmanın bir parçasıdır.'
+  'Mola da çalışmanın bir parçasıdır.',
+  'Motivasyon başlatır, alışkanlık devam ettirir.',
+  'Bugünün 50 dakikası, sınav günündeki 5 nettir.',
+  'Videolar bekleyebilir; hedefin beklemez.',
+  'Mükemmel gün bekleme; iyi bir blok yeter.',
+  'Öğretmen olacağın sınıfı düşün: o öğrenciler seni bekliyor.',
+  'Kendini dünkü hâlinle kıyasla, başkasıyla değil.',
+  'Zor geliyorsa gelişiyorsun demektir.',
+  'Sabır acıdır, meyvesi tatlıdır.',
+  'Damlaya damlaya göl olur; konu konu sınav biter.',
+  'Telefonu başka odaya bırak, hedefini yanına al.'
 ];

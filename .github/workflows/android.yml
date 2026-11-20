@@ -29,9 +29,7 @@ jobs:
         run: |
           npx cap add android
           npx capacitor-assets generate --android --iconBackgroundColor '#0f5c4d' --splashBackgroundColor '#0f5c4d' --splashBackgroundColorDark '#0f1412'
-          cp -r android-extra/res/. android/app/src/main/res/
-          # bildirim izinleri (Android 13+) ve tam zamanlı alarm (Android 12+)
-          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n</manifest>#' android/app/src/main/AndroidManifest.xml
+          node scripts/patch-android.mjs
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
           npx cap sync android
       - name: Sabit imza anahtarı (güncellemeler eskisinin üstüne kurulsun diye)

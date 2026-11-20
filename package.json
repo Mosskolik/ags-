@@ -4,7 +4,7 @@
   "private": true,
   "description": "AGS, ÖABT ve yüksek lisans için çalışma koçu (Android)",
   "scripts": {
-    "www": "rm -rf www && mkdir www && cp -r index.html styles.css data.js app.js manifest.webmanifest icons www/"
+    "www": "rm -rf www && mkdir www && cp -r index.html styles.css data.js mascot.js app.js manifest.webmanifest icons www/"
   },
   "dependencies": {
     "@capacitor/android": "6.1.2",
